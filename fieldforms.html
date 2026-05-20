@@ -215,6 +215,7 @@ body{background:var(--bg);color:var(--tx);font-family:var(--fn);font-size:14px;d
 .edtbtn{display:inline-flex;align-items:center;justify-content:center;gap:4px;padding:0 11px;height:34px;border-radius:7px;border:1.5px solid #d0d4dc;background:#fff;color:#1a1a2c;font-family:var(--fn);font-weight:600;font-size:12px;cursor:pointer;transition:.12s;white-space:nowrap;flex-shrink:0;touch-action:manipulation;}
 .edtbtn:hover,.edtbtn:active{border-color:#5c2d91;color:#5c2d91;}
 .edtbtn.on{background:#e8f5e9;border-color:#16a34a;color:#16a34a;}
+#btn-markup.on{background:rgba(92,45,145,.2)!important;color:#a280d1!important;border-color:rgba(92,45,145,.5)!important;}
 .edtbtn.solid{background:#5c2d91;border-color:#5c2d91;color:#fff;}
 .edtbtn.solid:hover{background:#3d1d63;border-color:#3d1d63;}
 .edtbtn.amber{background:#fff8ed;border-color:#f5a623;color:#c07000;}
@@ -315,29 +316,9 @@ input.mkslider{width:80px;height:4px;accent-color:#5c2d91;cursor:pointer;flex-sh
 </head>
 <body>
 
-<!-- ══ WAITING ══ -->
-<div id="swait" class="screen active">
-  <div class="tb">
-    <div class="tbl">Field<em>Forms</em></div>
-    <div class="sp"></div>
-    <button class="bi" id="admBtnW" style="display:none;" onclick="openAdmin()">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-    </button>
-  </div>
-  <div style="flex:1;display:flex;align-items:center;justify-content:center;padding:28px;flex-direction:column;gap:20px;">
-    <div style="text-align:center;">
-      <div style="font-size:52px;margin-bottom:14px;">📋</div>
-      <div style="font-family:var(--fnc);font-size:20px;font-weight:800;letter-spacing:.5px;margin-bottom:7px;">FieldForms</div>
-      <div style="font-size:12px;color:var(--tx2);line-height:1.7;max-width:260px;">Open a site in <strong style="color:var(--tx);">Field Hub</strong> and tap <em style="color:var(--acc);">+ New Form</em> to begin.</div>
-    </div>
-    <button class="btn bg bf" onclick="showLibrary(null)" style="max-width:280px;">Browse Templates (no context)</button>
-  </div>
-</div>
-
 <!-- ══ TEMPLATE LIBRARY ══ -->
-<div id="slib" class="screen">
+<div id="slib" class="screen active">
   <div class="tb">
-    <button class="bi" onclick="goWait()"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg></button>
     <div class="tbt"><div class="tt">Form Library</div><div class="ts" id="libctx">Select a template</div></div>
     <button class="bi" id="admBtnL" style="display:none;" onclick="openAdmin()">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
@@ -366,26 +347,9 @@ input.mkslider{width:80px;height:4px;accent-color:#5c2d91;cursor:pointer;flex-sh
 <!-- ══════════ PDF EDITOR ══════════ -->
 <div id="se" class="screen">
   <div class="etb">
-    <button class="bi" onclick="closeEditor()"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg></button>
+    <button class="btn bg bsm" onclick="closeEditor()" style="white-space:nowrap;flex-shrink:0;">Change Form</button>
     <div class="etn"><div class="et" id="edtitle">Form</div><div class="es2" id="edst">—</div></div>
-  </div>
-
-  <!-- Primary editor toolbar -->
-  <div class="edtb">
-    <span class="edtpg" id="pg-ind"></span>
-    <div class="edtsep"></div>
-    <button class="edtbtn" id="btn-prev" disabled onclick="navTo(curPage-1)">◀</button>
-    <button class="edtbtn" id="btn-next" disabled onclick="navTo(curPage+1)">▶</button>
-    <div class="edtsep"></div>
-    <button class="edtbtn" id="btn-zout" onclick="doZoom(-0.25)">− <span class="lbl">Zoom</span></button>
-    <button class="edtbtn" id="btn-zin"  onclick="doZoom(+0.25)">+ <span class="lbl">Zoom</span></button>
-    <div class="edtsep"></div>
-    <button class="edtbtn" id="btn-markup" onclick="toggleMarkup()">🖊 <span class="lbl">Markup</span></button>
-    <button class="edtbtn" id="btn-inphoto" onclick="trigInlinePhoto()" title="Insert photo onto PDF page">📷 <span class="lbl">Insert Photo</span></button>
-    <button class="edtbtn" id="btn-photos" onclick="document.getElementById('ptray').classList.toggle('open')">🖼 <span class="lbl">Photo Pages</span></button>
-    <div class="edtsep"></div>
-    <button class="edtbtn amber" onclick="saveDraft()">💾 <span class="lbl">Draft</span></button>
-    <button class="edtbtn solid" onclick="showFNModal()">↓ <span class="lbl">Save PDF</span></button>
+    <div style="font-size:10px;color:var(--acc3);flex-shrink:0;font-family:var(--fnm);" id="save-status"></div>
   </div>
 
   <!-- Markup toolbar -->
@@ -425,7 +389,9 @@ input.mkslider{width:80px;height:4px;accent-color:#5c2d91;cursor:pointer;flex-sh
   </div>
 
   <div class="ebar">
-    <button class="btn bg" onclick="saveDraft()" style="flex:1;">💾 Save Draft</button>
+    <button class="btn bg" id="btn-markup" onclick="toggleMarkup()" style="flex:1;">🖊 Markup</button>
+    <button class="btn bg" onclick="trigInlinePhoto()" style="flex:1;">📷 Insert Photo</button>
+    <button class="btn bg" onclick="document.getElementById('ptray').classList.toggle('open')" style="flex:1;">🖼 Photo Pages</button>
     <button class="btn bp" onclick="showFNModal()" style="flex:2;">↓ Save PDF</button>
   </div>
 </div>
@@ -647,7 +613,7 @@ function showLibrary(ctx){
   showSc('slib');
 }
 
-function goWait(){showSc('swait');}
+function goWait(){showLibrary(APP.ctx||null);}
 
 async function loadTemplates(){
   try{APP.templates=await da('form_templates');}catch(e){console.warn('template load failed',e);APP.templates=[];}
@@ -697,14 +663,23 @@ async function pickTemplate(tplId,tplName,restore){
   curPage=1;edZoom=1.5;markupMode=false;
   document.getElementById('mkbar').classList.remove('show');
   document.getElementById('btn-markup').classList.remove('on');
-  // Restore saved field values before rendering so pages initialise with them
+  // Restore saved state before rendering so pages initialise with it
   if(restore){
     if(restore.fieldVals)Object.assign(fieldVals,restore.fieldVals);
     if(restore.drawData)Object.assign(drawData,restore.drawData);
+    if(restore.inlinePhotos&&restore.inlinePhotos.length)inlinePhotos=restore.inlinePhotos.map(ip=>({...ip}));
+    if(restore.photoPages&&restore.photoPages.length){
+      photoPages2=restore.photoPages.map(pp=>({...pp}));
+      photoN=Math.max(...restore.photoPages.map(p=>typeof p.id==='number'?p.id:0),0);
+    }
   }
   showSc('se');
   setMarkupMode(false);
   await loadPDF(tplId);
+  // Add photo tray cards after PDF renders
+  if(restore&&restore.photoPages&&restore.photoPages.length){
+    for(const pp of photoPages2)addPhotoCard(pp);
+  }
   startAutoSave();
 }
 
@@ -802,14 +777,14 @@ function makeFieldOverlay(ann,vp,pageH){
     el.className='fov-text';el.style.fontSize=fs;
     if(!ann.multiLine)el.type='text';
     el.value=fieldVals[fid]!=null?fieldVals[fid]:(ann.fieldValue||'');
-    el.addEventListener('input',()=>{fieldVals[fid]=el.value;});
+    el.addEventListener('input',()=>{fieldVals[fid]=el.value;scheduleSave();});
     wrap.appendChild(el);return wrap;
   }
   if(ann.fieldType==='Btn'&&!ann.radioButton){
     const el=document.createElement('div');el.className='fov-check';el.style.fontSize=Math.min(h*.68,16)+'px';
     const on=fieldVals[fid]===true||(fieldVals[fid]==null&&ann.fieldValue===ann.buttonValue);
     if(on){el.classList.add('on');el.textContent='✓';}
-    el.addEventListener('click',()=>{const n=el.classList.toggle('on');el.textContent=n?'✓':'';fieldVals[fid]=n;});
+    el.addEventListener('click',()=>{const n=el.classList.toggle('on');el.textContent=n?'✓':'';fieldVals[fid]=n;scheduleSave();});
     wrap.appendChild(el);return wrap;
   }
   if(ann.fieldType==='Btn'&&ann.radioButton){
@@ -817,13 +792,13 @@ function makeFieldOverlay(ann,vp,pageH){
     el.dataset.rg=fid;el.dataset.val=ann.buttonValue||'Yes';
     const on=fieldVals[fid]===el.dataset.val||(fieldVals[fid]==null&&ann.fieldValue===ann.buttonValue);
     if(on){el.classList.add('on');el.textContent='●';}
-    el.addEventListener('click',()=>{document.querySelectorAll(`[data-rg="${CSS.escape(fid)}"]`).forEach(o=>{o.classList.remove('on');o.textContent='';});el.classList.add('on');el.textContent='●';fieldVals[fid]=el.dataset.val;});
+    el.addEventListener('click',()=>{document.querySelectorAll(`[data-rg="${CSS.escape(fid)}"]`).forEach(o=>{o.classList.remove('on');o.textContent='';});el.classList.add('on');el.textContent='●';fieldVals[fid]=el.dataset.val;scheduleSave();});
     wrap.appendChild(el);return wrap;
   }
   if(ann.fieldType==='Ch'){
     const el=document.createElement('select');el.className='fov-select';el.style.fontSize=fs;
     el.innerHTML='<option value="">—</option>'+(ann.options||[]).map(o=>{const v=typeof o==='string'?o:(o.exportValue||'');const l=typeof o==='string'?o:(o.displayValue||v);return`<option value="${v}"${fieldVals[fid]===v?' selected':''}>${l}</option>`;}).join('');
-    el.addEventListener('change',()=>{fieldVals[fid]=el.value;});
+    el.addEventListener('change',()=>{fieldVals[fid]=el.value;scheduleSave();});
     wrap.appendChild(el);return wrap;
   }
   return null;
@@ -877,7 +852,7 @@ function bindDrawEvents(dc,pageNum){
     if(mkTool==='arrow'||mkTool==='rect')redrawPage(pageNum,dc);
     const ctx=dc.getContext('2d');drawEdStroke(ctx,currentStroke,false);
     if(!drawData[pageNum])drawData[pageNum]=[];if(!undoStack[pageNum])undoStack[pageNum]=[];
-    drawData[pageNum].push(currentStroke);undoStack[pageNum].push(currentStroke);currentStroke=null;
+    drawData[pageNum].push(currentStroke);undoStack[pageNum].push(currentStroke);currentStroke=null;scheduleSave();
   }
   dc.addEventListener('mousedown',start);dc.addEventListener('mousemove',move);dc.addEventListener('mouseup',end);
   dc.addEventListener('touchstart',start,{passive:false});dc.addEventListener('touchmove',move,{passive:false});dc.addEventListener('touchend',end);
@@ -910,7 +885,7 @@ function hexAlpha(hex,a){const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slic
 // ── ZOOM / NAV ──
 async function doZoom(delta){if(!pdfJs)return;edZoom=Math.min(3,Math.max(0.75,edZoom+delta));edLoader(true);await renderPages();edLoader(false);}
 function navTo(n){if(!pdfJs)return;n=Math.max(1,Math.min(n,totPages));const w=document.querySelector(`.pw[data-page="${n}"]`);if(w){w.scrollIntoView({behavior:'smooth',block:'start'});curPage=n;updateNav();}}
-function updateNav(){document.getElementById('pg-ind').textContent=totPages?`${curPage}/${totPages}`:'';document.getElementById('btn-prev').disabled=curPage<=1;document.getElementById('btn-next').disabled=curPage>=totPages;}
+function updateNav(){const ind=document.getElementById('pg-ind');if(ind)ind.textContent=totPages?`${curPage}/${totPages}`:'';const bp=document.getElementById('btn-prev');if(bp)bp.disabled=curPage<=1;const bn=document.getElementById('btn-next');if(bn)bn.disabled=curPage>=totPages;}
 document.addEventListener('DOMContentLoaded',()=>{
   document.getElementById('pdfscroll').addEventListener('scroll',function(){
     const mid=this.getBoundingClientRect().top+this.getBoundingClientRect().height/2;
@@ -927,7 +902,7 @@ document.addEventListener('DOMContentLoaded',()=>{
   document.getElementById('mk-undo').addEventListener('click',undoLastStroke);
   document.getElementById('mk-clear-page').addEventListener('click',clearCurrentPage);
   // Photo tray add btn
-  document.getElementById('pcard-add-btn').addEventListener('click',()=>{photoN++;const o={id:photoN,title:'',dataUrl:null,mimeType:null};photoPages2.push(o);addPhotoCard(o);});
+  document.getElementById('pcard-add-btn').addEventListener('click',()=>{photoN++;const o={id:photoN,title:'',dataUrl:null,mimeType:null};photoPages2.push(o);addPhotoCard(o);scheduleSave();});
 });
 
 // ── INLINE PHOTOS (placed directly on PDF pages) ──
@@ -1028,9 +1003,9 @@ function addPhotoCard(obj){
   const imgDiv=card.querySelector('.pcard-img');
   const cap=card.querySelector('.pcard-cap');
   // Make image tappable to pick file
-  imgDiv.addEventListener('click',()=>{const fi=document.createElement('input');fi.type='file';fi.accept='image/*';fi.onchange=function(){const f=this.files[0];if(!f)return;const rd=new FileReader();rd.onload=ev=>{fixImgOrientation(ev.target.result,corrected=>{obj.dataUrl=corrected;obj.mimeType='image/jpeg';imgDiv.innerHTML=`<img src="${corrected}" alt="">`;});};rd.readAsDataURL(f);};fi.click();});
-  cap.addEventListener('input',()=>{obj.title=cap.value;});
-  card.querySelector('.pcard-del').addEventListener('click',()=>{card.remove();photoPages2=photoPages2.filter(p=>p.id!==id);});
+  imgDiv.addEventListener('click',()=>{const fi=document.createElement('input');fi.type='file';fi.accept='image/*';fi.onchange=function(){const f=this.files[0];if(!f)return;const rd=new FileReader();rd.onload=ev=>{fixImgOrientation(ev.target.result,corrected=>{obj.dataUrl=corrected;obj.mimeType='image/jpeg';imgDiv.innerHTML=`<img src="${corrected}" alt="">`;scheduleSave();});};rd.readAsDataURL(f);};fi.click();});
+  cap.addEventListener('input',()=>{obj.title=cap.value;scheduleSave();});
+  card.querySelector('.pcard-del').addEventListener('click',()=>{card.remove();photoPages2=photoPages2.filter(p=>p.id!==id);scheduleSave();});
   document.getElementById('ptray-scroll').insertBefore(card,document.getElementById('pcard-add-btn'));
 }
 
@@ -1043,16 +1018,19 @@ function fixImgOrientation(dataUrl,callback){
 }
 
 // ── AUTO SAVE ──
+function scheduleSave(){clearTimeout(APP._saveTimer);APP._saveTimer=setTimeout(()=>saveDraft(true),1500);}
 function startAutoSave(){clearInterval(APP.autoTimer);APP.autoTimer=setInterval(()=>saveDraft(true),60000);}
 async function saveDraft(silent=false){
   try{
-    const snap={fieldVals,drawData,tplId:APP.currentTemplate?.id,tplName:APP.currentTemplate?.name};
+    const snap={fieldVals,drawData,tplId:APP.currentTemplate?.id,tplName:APP.currentTemplate?.name,inlinePhotos:inlinePhotos.map(ip=>({...ip})),photoPages:photoPages2.map(pp=>({...pp}))};
     localStorage.setItem('ff_autosave',JSON.stringify(snap));
     if(APP.hubDocId&&window.parent!==window){
       window.parent.postMessage({type:'DRAFT_SAVE',docId:APP.hubDocId,payload:snap},'*');
     }
+    const ss=document.getElementById('save-status');
+    if(ss)ss.textContent='Saved '+new Date().toLocaleTimeString('en-NZ',{hour:'2-digit',minute:'2-digit'});
   }catch(e){}
-  if(!silent)showToast('Draft saved locally','tok');
+  if(!silent)showToast('Auto-saved','tok');
 }
 function closeEditor(){clearInterval(APP.autoTimer);showSc('slib');}
 
@@ -1075,34 +1053,51 @@ function updFN(){
   const tplName=safe(tpl?tpl.name:'Form');
   document.getElementById('fnprev').textContent=`${wo}_${site}_${tplName}.pdf`;
 }
+const FF_EMAIL_MAP={Fault:'EnergyValleyFaults@downergroup.com',Defect:'EnergyValleyDefects@downergroup.com',Project:'EnergyValleyProjects@downer.co.nz'};
 async function exportSend(){
-  closeM('mfn');await saveDraft(true);
+  closeM('mfn');
   const fname=document.getElementById('fnprev').textContent;
   const bytes=await buildExportPDF();
   downloadPDF(bytes,fname);
+  const snap={fieldVals,drawData,tplId:APP.currentTemplate?.id,tplName:APP.currentTemplate?.name,inlinePhotos:inlinePhotos.map(ip=>({...ip})),photoPages:photoPages2.map(pp=>({...pp}))};
   if(APP.hubDocId&&window.parent!==window){
-    const snap={fieldVals,drawData,tplId:APP.currentTemplate?.id,tplName:APP.currentTemplate?.name};
     const reader=new FileReader();
     reader.onloadend=()=>{window.parent.postMessage({type:'SAVE_PDF',docId:APP.hubDocId,pdfDataUri:reader.result,formPayload:snap,fileName:fname},'*');};
     reader.readAsDataURL(new Blob([bytes],{type:'application/pdf'}));
   }
+  const jobType=APP.ctx?.jobType||'';
+  const to=FF_EMAIL_MAP[jobType]||'';
   const sub=encodeURIComponent(fname.replace('.pdf',''));
   const body=encodeURIComponent(`Attached: ${fname}\nTechnician: ${APP.ctx?.userName||''}\nDate: ${new Date().toLocaleDateString('en-NZ')}\n\nFieldForms — Downer NZ`);
-  setTimeout(()=>window.location.href=`mailto:?subject=${sub}&body=${body}`,500);
-  showToast('PDF exported & Outlook opened','tok');
+  setTimeout(()=>{
+    window.location.href=`mailto:${to}?subject=${sub}&body=${body}`;
+    alert(`✅ PDF saved as:\n"${fname}"\n\nEmail opening${to?` to:\n${to}`:':\n(Please add recipient for this job type)'}\n\nPlease attach the PDF before sending.`);
+    if(window.parent!==window){
+      window.parent.postMessage({type:'APP_DONE'},'*');
+    }else{
+      closeEditor();
+    }
+  },500);
 }
 async function exportOnly(){
   closeM('mfn');
   const fname=document.getElementById('fnprev').textContent;
   const bytes=await buildExportPDF();
   downloadPDF(bytes,fname);
+  const snap={fieldVals,drawData,tplId:APP.currentTemplate?.id,tplName:APP.currentTemplate?.name,inlinePhotos:inlinePhotos.map(ip=>({...ip})),photoPages:photoPages2.map(pp=>({...pp}))};
   if(APP.hubDocId&&window.parent!==window){
-    const snap={fieldVals,drawData,tplId:APP.currentTemplate?.id,tplName:APP.currentTemplate?.name};
     const reader=new FileReader();
     reader.onloadend=()=>{window.parent.postMessage({type:'SAVE_PDF',docId:APP.hubDocId,pdfDataUri:reader.result,formPayload:snap,fileName:fname},'*');};
     reader.readAsDataURL(new Blob([bytes],{type:'application/pdf'}));
   }
-  showToast('PDF saved','tok');
+  setTimeout(()=>{
+    alert(`✅ PDF saved as:\n"${fname}"\n\nNo email sent.`);
+    if(window.parent!==window){
+      window.parent.postMessage({type:'APP_DONE'},'*');
+    }else{
+      closeEditor();
+    }
+  },500);
 }
 
 async function buildExportPDF(){
@@ -1354,16 +1349,13 @@ function showToast(msg,cls=''){const t=document.getElementById('toast');t.textCo
 // ═══ INIT ═══
 (async()=>{
   SB=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
-  // Load templates in background — don't block the waiting screen
   loadTemplates();
-  // Admin button visibility (simple check — anyone running standalone gets admin)
+  // Standalone admin button
   if(window.parent===window){
-    document.getElementById('admBtnW').style.display='';
-    document.getElementById('admBtnL').style.display='';
+    const admL=document.getElementById('admBtnL');if(admL)admL.style.display='';
     APP.isAdmin=true;
+    showLibrary(null);
   }
-  // Show waiting screen
-  showSc('swait');
   // Tell hub we're ready
   if(window.parent!==window)window.parent.postMessage({type:'EMBED_READY',app:'fieldforms'},'*');
 })();
@@ -1382,11 +1374,11 @@ window.addEventListener('message',function(e){
       siteName:e.data.siteName||'',
       siteId:e.data.siteId||null,
       userName:e.data.userName||'',
+      jobType:e.data.jobType||'',
     };
     APP.ctx=ctx;
     if(e.data.isAdmin){
-      document.getElementById('admBtnW').style.display='';
-      document.getElementById('admBtnL').style.display='';
+      const admL=document.getElementById('admBtnL');if(admL)admL.style.display='';
       APP.isAdmin=true;
     }
     // If hub sent a saved payload with a template, restore directly into editor
