@@ -733,38 +733,43 @@ function edLoader(on){const el=document.getElementById('ed-loader');el.classList
 async function renderPages(){
   const container=document.getElementById('pdfpages');
   container.innerHTML='';
+  // Cap DPR at 2 — 3× on some phones would triple memory/render time for marginal gain
+  const dpr=Math.min(window.devicePixelRatio||1,2);
   for(let p=1;p<=totPages;p++){
     const page=await pdfJs.getPage(p);
-    const vp=page.getViewport({scale:edZoom});
+    const logVp=page.getViewport({scale:edZoom});          // CSS (logical) dimensions
+    const hiVp =page.getViewport({scale:edZoom*dpr});      // physical pixel dimensions
+    const cssW=logVp.width, cssH=logVp.height;
     const pageH=page.getViewport({scale:1}).height;
     const wrap=document.createElement('div');
     wrap.className='pw';wrap.dataset.page=p;
-    wrap.style.width=vp.width+'px';wrap.style.height=vp.height+'px';
-    // PDF canvas
+    wrap.style.width=cssW+'px';wrap.style.height=cssH+'px';
+    // PDF canvas — rendered at physical resolution, displayed at CSS size → crisp on retina
     const canvas=document.createElement('canvas');canvas.className='bgcv';
-    canvas.width=vp.width;canvas.height=vp.height;
-    await page.render({canvasContext:canvas.getContext('2d'),viewport:vp}).promise;
+    canvas.width=hiVp.width;canvas.height=hiVp.height;
+    canvas.style.width=cssW+'px';canvas.style.height=cssH+'px';
+    await page.render({canvasContext:canvas.getContext('2d'),viewport:hiVp}).promise;
     wrap.appendChild(canvas);
-    // Field overlays
+    // Field overlays — positioned in CSS pixels using logical viewport
     const anns=await page.getAnnotations();
     for(const ann of anns){
       if(ann.subtype!=='Widget')continue;
-      const ov=makeFieldOverlay(ann,vp,pageH);
+      const ov=makeFieldOverlay(ann,logVp,pageH);
       if(ov)wrap.appendChild(ov);
     }
-    // Draw canvas
+    // Draw canvas — also at physical resolution for crisp markup strokes
     const dc=document.createElement('canvas');
     dc.className='draw-canvas';dc.dataset.page=p;
-    dc.width=vp.width;dc.height=vp.height;
-    dc.style.width=vp.width+'px';dc.style.height=vp.height+'px';
+    dc.width=cssW*dpr;dc.height=cssH*dpr;
+    dc.style.width=cssW+'px';dc.style.height=cssH+'px';
     wrap.appendChild(dc);
     if(drawData[p]&&drawData[p].length)redrawPage(p,dc);
     bindDrawEvents(dc,p);
     // Inline photos on this page
-    for(const ip of inlinePhotos.filter(x=>x.pageNum===p))renderInlinePhoto(ip,wrap,vp.width,vp.height);
+    for(const ip of inlinePhotos.filter(x=>x.pageNum===p))renderInlinePhoto(ip,wrap,cssW,cssH);
     // Drop zone for dragged photos
     wrap.addEventListener('dragover',e=>e.preventDefault());
-    wrap.addEventListener('drop',e=>{e.preventDefault();const pid=e.dataTransfer.getData('inlinePhotoId');if(!pid)return;const r=wrap.getBoundingClientRect();placeInlinePhoto(p,pid,(e.clientX-r.left)/r.width*100,(e.clientY-r.top)/r.height*100,wrap,vp.width,vp.height);});
+    wrap.addEventListener('drop',e=>{e.preventDefault();const pid=e.dataTransfer.getData('inlinePhotoId');if(!pid)return;const r=wrap.getBoundingClientRect();placeInlinePhoto(p,pid,(e.clientX-r.left)/r.width*100,(e.clientY-r.top)/r.height*100,wrap,cssW,cssH);});
     container.appendChild(wrap);
   }
   applyMarkupMode();
