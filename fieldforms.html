@@ -296,6 +296,20 @@ input.mkslider{width:80px;height:4px;accent-color:#5c2d91;cursor:pointer;flex-sh
 .insert-photo-btn:hover{background:rgba(59,130,246,.12);border-color:#3b82f6;}
 .insert-photo-btn .ipic{font-size:20px;}
 
+/* ── SITE GALLERY ── */
+.sgal-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(82px,1fr));gap:8px;max-height:52vh;overflow-y:auto;padding:2px 0 4px;}
+.sgal-thumb{position:relative;aspect-ratio:1;border-radius:8px;overflow:hidden;cursor:pointer;border:2px solid transparent;transition:.12s;}
+.sgal-thumb:hover{border-color:#3b82f6;}
+.sgal-thumb img{width:100%;height:100%;object-fit:cover;display:block;pointer-events:none;}
+.sgal-pp-btn{position:absolute;bottom:3px;right:3px;background:rgba(0,0,0,.58);color:#fff;border:none;border-radius:4px;font-size:9px;padding:3px 5px;cursor:pointer;line-height:1.4;touch-action:manipulation;}
+.sgal-pp-btn:active{background:rgba(59,130,246,.9);}
+.sgal-empty{text-align:center;padding:28px 16px;color:var(--tx3);font-size:13px;}
+/* Drop-over highlight on PDF page wrappers */
+.pw.file-drop-over{outline:3px dashed #3b82f6;outline-offset:-3px;}
+.pw.file-drop-over::after{content:'';position:absolute;inset:0;background:rgba(59,130,246,.06);z-index:20;pointer-events:none;}
+/* Drop-over on photo tray scroll area */
+.ptray-scroll.file-drop-over{background:rgba(59,130,246,.07);outline:2px dashed rgba(59,130,246,.45);outline-offset:-4px;border-radius:6px;}
+
 /* ── LOADER ── */
 #ed-loader{position:absolute;inset:0;background:rgba(221,224,230,.85);display:none;align-items:center;justify-content:center;flex-direction:column;gap:10px;z-index:30;}
 #ed-loader.on{display:flex;}
@@ -392,6 +406,7 @@ input.mkslider{width:80px;height:4px;accent-color:#5c2d91;cursor:pointer;flex-sh
   <div class="ebar">
     <button class="btn bg" id="btn-markup" onclick="toggleMarkup()" style="flex:1;">🖊 Markup</button>
     <button class="btn bg" onclick="trigInlinePhoto()" style="flex:1;">📷 Insert Photo</button>
+    <button class="btn bg" id="btn-sgal" onclick="openSiteGallery()" style="flex:1;display:none;">🗂 Site Photos</button>
     <button class="btn bg" onclick="document.getElementById('ptray').classList.toggle('open')" style="flex:1;">🖼 Photo Pages</button>
     <button class="btn bp" onclick="showFNModal()" style="flex:2;">↓ Save PDF</button>
   </div>
@@ -493,6 +508,17 @@ input.mkslider{width:80px;height:4px;accent-color:#5c2d91;cursor:pointer;flex-sh
   <div class="abm" id="agm">—</div>
   <button class="abb" onclick="closeA('aogen')">OK</button>
 </div></div>
+
+<!-- Site Photo Gallery -->
+<div class="mo" id="msgal">
+  <div class="md">
+    <div class="mdh"></div>
+    <div class="mdt">🗂 Site Photos</div>
+    <div style="font-size:11px;color:var(--tx3);margin-bottom:10px;">Tap a photo to place it on the PDF. Use the 🖼 button to add it to Photo Pages.</div>
+    <div id="sgal-grid" class="sgal-grid"></div>
+    <button class="btn bg bf" style="margin-top:12px;" onclick="closeM('msgal')">Close</button>
+  </div>
+</div>
 
 <!-- Hidden inputs -->
 <input type="file" id="phin" accept="image/*" multiple style="display:none;" onchange="handlePhotoAdd(this)">
@@ -767,9 +793,17 @@ async function renderPages(){
     bindDrawEvents(dc,p);
     // Inline photos on this page
     for(const ip of inlinePhotos.filter(x=>x.pageNum===p))renderInlinePhoto(ip,wrap,cssW,cssH);
-    // Drop zone for dragged photos
-    wrap.addEventListener('dragover',e=>e.preventDefault());
-    wrap.addEventListener('drop',e=>{e.preventDefault();const pid=e.dataTransfer.getData('inlinePhotoId');if(!pid)return;const r=wrap.getBoundingClientRect();placeInlinePhoto(p,pid,(e.clientX-r.left)/r.width*100,(e.clientY-r.top)/r.height*100,wrap,cssW,cssH);});
+    // Drop zone — existing placed-photo drags + file/URL drops from OS or browser
+    wrap.addEventListener('dragover',e=>{e.preventDefault();if(hasImageTransfer(e))wrap.classList.add('file-drop-over');});
+    wrap.addEventListener('dragleave',e=>{if(!wrap.contains(e.relatedTarget))wrap.classList.remove('file-drop-over');});
+    wrap.addEventListener('drop',e=>{
+      e.preventDefault();wrap.classList.remove('file-drop-over');
+      const pid=e.dataTransfer.getData('inlinePhotoId');
+      if(pid){const r=wrap.getBoundingClientRect();placeInlinePhoto(p,pid,(e.clientX-r.left)/r.width*100,(e.clientY-r.top)/r.height*100,wrap,cssW,cssH);return;}
+      const r=wrap.getBoundingClientRect();
+      const xPct=(e.clientX-r.left)/r.width*100,yPct=(e.clientY-r.top)/r.height*100;
+      loadImageFromTransfer(e.dataTransfer).then(dataUrl=>{if(dataUrl)placeImageOnPage(p,dataUrl,xPct,yPct,wrap,cssW,cssH);});
+    });
     container.appendChild(wrap);
   }
   applyMarkupMode();
@@ -915,45 +949,125 @@ document.addEventListener('DOMContentLoaded',()=>{
   document.getElementById('mk-clear-page').addEventListener('click',clearCurrentPage);
   // Photo tray add btn
   document.getElementById('pcard-add-btn').addEventListener('click',()=>{photoN++;const o={id:photoN,title:'',dataUrl:null,mimeType:null};photoPages2.push(o);addPhotoCard(o);scheduleSave();});
+  // Photo tray: drop image files or URLs → add as photo page
+  const ptrayScroll=document.getElementById('ptray-scroll');
+  ptrayScroll.addEventListener('dragover',e=>{if(hasImageTransfer(e)){e.preventDefault();ptrayScroll.classList.add('file-drop-over');}});
+  ptrayScroll.addEventListener('dragleave',e=>{if(!ptrayScroll.contains(e.relatedTarget))ptrayScroll.classList.remove('file-drop-over');});
+  ptrayScroll.addEventListener('drop',e=>{
+    e.preventDefault();ptrayScroll.classList.remove('file-drop-over');
+    loadImageFromTransfer(e.dataTransfer).then(dataUrl=>{
+      if(!dataUrl)return;
+      photoN++;const obj={id:photoN,title:'',dataUrl,mimeType:'image/jpeg'};
+      photoPages2.push(obj);addPhotoCard(obj);
+      document.getElementById('ptray').classList.add('open');
+      scheduleSave();showToast('Photo added to Photo Pages','tok');
+    });
+  });
 });
 
 // ── INLINE PHOTOS (placed directly on PDF pages) ──
-// Triggered by "Insert Photo" button — user picks file, then taps page to place
-let _inlineBuffer=null; // {dataUrl,mimeType} waiting to be placed
-function trigInlinePhoto(){
-  document.getElementById('phin-inline').click();
-}
+let _inlineBuffer=null;
+function trigInlinePhoto(){document.getElementById('phin-inline').click();}
 function handleInlinePhotoChosen(inp){
   const f=inp.files[0];if(!f)return;inp.value='';
   const rd=new FileReader();
-  rd.onload=e=>{
-    fixImgOrientation(e.target.result,corrected=>{
-      _inlineBuffer={dataUrl:corrected,mimeType:'image/jpeg'};
-      showToast('Photo ready — tap on the PDF page to place it','twrn');
-      // Switch to a visual cue: highlight pages
-      document.querySelectorAll('.pw').forEach(pw=>{pw.style.cursor='crosshair';pw.classList.add('placing-photo');});
-      document.querySelectorAll('.pw').forEach(pw=>{
-        function placeTap(e){
-          if(!_inlineBuffer)return;
-          e.preventDefault();
-          const r=pw.getBoundingClientRect();
-          const src=e.touches?e.touches[0]:e;
-          const x=(src.clientX-r.left)/r.width*100;
-          const y=(src.clientY-r.top)/r.height*100;
-          const pg=parseInt(pw.dataset.page);
-          const ip={id:'ip_'+Date.now(),pageNum:pg,x,y,w:35,h:0,dataUrl:_inlineBuffer.dataUrl,mimeType:_inlineBuffer.mimeType};
-          // Estimate h from aspect ratio
-          const img=new Image();img.onload=()=>{ip.h=ip.w*(img.naturalHeight/img.naturalWidth);inlinePhotos.push(ip);renderInlinePhoto(ip,pw,pw.offsetWidth,pw.offsetHeight);};img.src=ip.dataUrl;
-          _inlineBuffer=null;
-          document.querySelectorAll('.pw').forEach(p2=>{p2.style.cursor='';p2.classList.remove('placing-photo');p2.removeEventListener('click',placeTap);p2.removeEventListener('touchend',placeTap);});
-          showToast('Photo placed — drag to reposition, resize with handle','tok');
-        }
-        pw.addEventListener('click',placeTap,{once:false});
-        pw.addEventListener('touchend',placeTap,{once:false});
-      });
-    });
-  };
+  rd.onload=e=>fixImgOrientation(e.target.result,enterPlacementMode);
   rd.readAsDataURL(f);
+}
+
+// Shared entry point: load a dataUrl into placement mode (tap-to-place)
+function enterPlacementMode(dataUrl){
+  _inlineBuffer={dataUrl,mimeType:'image/jpeg'};
+  showToast('Photo ready — tap on the PDF page to place it','twrn');
+  document.querySelectorAll('.pw').forEach(pw=>{
+    pw.style.cursor='crosshair';pw.classList.add('placing-photo');
+    function placeTap(e){
+      if(!_inlineBuffer||e.target.closest('.phov'))return;
+      e.preventDefault();
+      const r=pw.getBoundingClientRect();
+      const src=e.touches?e.touches[0]:e;
+      placeImageOnPage(parseInt(pw.dataset.page),_inlineBuffer.dataUrl,(src.clientX-r.left)/r.width*100,(src.clientY-r.top)/r.height*100,pw,pw.offsetWidth,pw.offsetHeight);
+      _inlineBuffer=null;
+      document.querySelectorAll('.pw').forEach(p2=>{p2.style.cursor='';p2.classList.remove('placing-photo');p2.removeEventListener('click',placeTap);p2.removeEventListener('touchend',placeTap);});
+    }
+    pw.addEventListener('click',placeTap,{once:false});
+    pw.addEventListener('touchend',placeTap,{once:false});
+  });
+}
+
+// Place an image centered on the given % position (used by drop and placement mode)
+function placeImageOnPage(pageNum,dataUrl,xPct,yPct,wrap,W,H){
+  const ip={id:'ip_'+Date.now(),pageNum,x:Math.max(0,xPct-17.5),y:yPct,w:35,h:0,dataUrl,mimeType:'image/jpeg'};
+  const img=new Image();
+  img.onload=()=>{
+    ip.h=ip.w*(img.naturalHeight/img.naturalWidth);
+    ip.y=Math.max(0,yPct-ip.h/2);
+    inlinePhotos.push(ip);renderInlinePhoto(ip,wrap,W,H);
+    scheduleSave();showToast('Photo placed — drag to reposition, resize with handle','tok');
+  };
+  img.src=dataUrl;
+}
+
+// ── DRAG-AND-DROP HELPERS ──
+function hasImageTransfer(e){
+  return [...(e.dataTransfer?.types||[])].some(t=>t==='Files'||t==='text/uri-list'||t==='text/plain');
+}
+
+async function loadImageFromTransfer(dt){
+  if(dt.files&&dt.files.length){
+    const f=[...dt.files].find(f=>f.type.startsWith('image/'));
+    if(f)return new Promise(r=>{const rd=new FileReader();rd.onload=e=>fixImgOrientation(e.target.result,r);rd.readAsDataURL(f);});
+  }
+  const raw=dt.getData('text/uri-list')||dt.getData('text/plain')||'';
+  const src=raw.split('\n').map(s=>s.trim()).find(s=>/^https?:\/\//i.test(s));
+  if(!src)return null;
+  try{
+    const resp=await fetch(src);
+    const blob=await resp.blob();
+    if(!blob.type.startsWith('image/'))return null;
+    return new Promise(r=>{const rd=new FileReader();rd.onload=e=>fixImgOrientation(e.target.result,r);rd.readAsDataURL(blob);});
+  }catch{return null;}
+}
+
+// ── SITE GALLERY ──
+async function openSiteGallery(){
+  const siteId=APP.ctx?.siteId;
+  if(!siteId){showToast('No site context','twrn');return;}
+  const grid=document.getElementById('sgal-grid');
+  grid.innerHTML='<div class="sgal-empty">Loading…</div>';
+  openM('msgal');
+  const{data:photos=[],error}=await SB.from('site_photos').select('id,public_url').eq('site_id',siteId).order('sort_order').order('created_at');
+  if(error||!photos.length){
+    grid.innerHTML=`<div class="sgal-empty">${error?'Could not load photos.':'No photos in this site\'s gallery yet.'}</div>`;
+    return;
+  }
+  grid.innerHTML=photos.map((p,i)=>`
+    <div class="sgal-thumb" data-idx="${i}">
+      <img src="${p.public_url}" loading="lazy">
+      <button class="sgal-pp-btn" title="Add to Photo Pages" onclick="event.stopPropagation();addGalleryPhotoToPages('${p.public_url}')">🖼</button>
+    </div>`).join('');
+  grid.querySelectorAll('.sgal-thumb').forEach((thumb,i)=>{
+    thumb.addEventListener('click',()=>{closeM('msgal');loadGalleryImage(photos[i].public_url,enterPlacementMode);});
+  });
+}
+
+async function addGalleryPhotoToPages(url){
+  loadGalleryImage(url,dataUrl=>{
+    photoN++;
+    const obj={id:photoN,title:'',dataUrl,mimeType:'image/jpeg'};
+    photoPages2.push(obj);addPhotoCard(obj);
+    document.getElementById('ptray').classList.add('open');
+    scheduleSave();showToast('Photo added to Photo Pages','tok');
+  });
+}
+
+function loadGalleryImage(url,cb){
+  showToast('Loading…','');
+  fetch(url).then(r=>r.blob()).then(blob=>{
+    const rd=new FileReader();
+    rd.onload=e=>fixImgOrientation(e.target.result,cb);
+    rd.readAsDataURL(blob);
+  }).catch(()=>showToast('Could not load photo','terr'));
 }
 
 function renderInlinePhoto(ip,wrap,W,H){
@@ -1389,6 +1503,7 @@ window.addEventListener('message',function(e){
       jobType:e.data.jobType||'',
     };
     APP.ctx=ctx;
+    if(ctx.siteId){const b=document.getElementById('btn-sgal');if(b)b.style.display='';}
     if(e.data.isAdmin){
       const admL=document.getElementById('admBtnL');if(admL)admL.style.display='';
       APP.isAdmin=true;
