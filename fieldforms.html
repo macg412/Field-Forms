@@ -609,7 +609,7 @@ function fromRow(table,row){if(!row)return null;const m=COL_FROM_DB[table];if(!m
 // ── DB HELPERS — same API as the old IndexedDB wrappers ──
 async function dg(table,id){const{data,error}=await SB.from(table).select('*').eq('id',id).maybeSingle();if(error)console.error('dg',table,error);return fromRow(table,data);}
 async function dp(table,obj){const row=toRow(table,obj);const{error}=await SB.from(table).upsert(row,{onConflict:'id'});if(error)console.error('dp',table,error);}
-async function da(table,filters){let q=SB.from(table).select('*');if(filters)for(const[col,val]of Object.entries(filters))q=q.eq(col,val);const{data,error}=await q.order('created_at',{ascending:false});if(error)console.error('da',table,error);return(data||[]).map(r=>fromRow(table,r));}
+async function da(table,filters,limit){let q=SB.from(table).select('*');if(filters)for(const[col,val]of Object.entries(filters))q=q.eq(col,val);q=q.order('created_at',{ascending:false});if(limit)q=q.limit(limit);const{data,error}=await q;if(error)console.error('da',table,error);return(data||[]).map(r=>fromRow(table,r));}
 async function dd(table,id){const{error}=await SB.from(table).delete().eq('id',id);if(error)console.error('dd',table,error);}
 
 // ═══ AUTH ═══
@@ -643,7 +643,7 @@ function showLibrary(ctx){
 function goWait(){showLibrary(APP.ctx||null);}
 
 async function loadTemplates(){
-  try{APP.templates=await da('form_templates');}catch(e){console.warn('template load failed',e);APP.templates=[];}
+  try{APP.templates=await da('form_templates',null,500);}catch(e){console.warn('template load failed',e);APP.templates=[];}
 }
 
 function renderLibCats(){
@@ -1332,7 +1332,7 @@ async function admLoadTemplates(){
   const list=document.getElementById('adm-tpl-list');
   if(!list)return;
   list.innerHTML='<div style="font-size:11px;color:var(--tx3);padding:8px;">Loading…</div>';
-  const tpls=await da('form_templates');
+  const tpls=await da('form_templates',null,500);
   APP.templates=tpls;
   renderSiteCats();
   if(!tpls.length){list.innerHTML='<div style="font-size:11px;color:var(--tx3);padding:8px;">No templates yet.</div>';return;}
