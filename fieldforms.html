@@ -1145,10 +1145,28 @@ function fixImgOrientation(dataUrl,callback){
 }
 
 // ── STORAGE UPLOAD (uploads dataUrl blob to doc-photos, replaces obj.dataUrl with URL) ──
+function compressDataUrl(dataUrl, maxDim, quality) {
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+      const w = Math.round(img.width * scale);
+      const h = Math.round(img.height * scale);
+      const c = document.createElement('canvas');
+      c.width = w; c.height = h;
+      c.getContext('2d').drawImage(img, 0, 0, w, h);
+      resolve(c.toDataURL('image/jpeg', quality));
+    };
+    img.onerror = () => resolve(dataUrl);
+    img.src = dataUrl;
+  });
+}
+
 async function uploadDocPhoto(obj, dataUrl, storageKey) {
   if (!APP.hubDocId) return;
   try {
-    const blob = await (await fetch(dataUrl)).blob();
+    const compressed = await compressDataUrl(dataUrl, 1920, 0.80);
+    const blob = await (await fetch(compressed)).blob();
     const { error } = await SB.storage.from('doc-photos').upload(`${APP.hubDocId}/${storageKey}`, blob, { contentType:'image/jpeg', upsert:true });
     if (error) return;
     const { data:{ publicUrl } } = SB.storage.from('doc-photos').getPublicUrl(`${APP.hubDocId}/${storageKey}`);
