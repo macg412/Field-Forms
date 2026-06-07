@@ -1004,6 +1004,7 @@ function placeImageOnPage(pageNum,dataUrl,xPct,yPct,wrap,W,H){
     ip.y=Math.max(0,yPct-ip.h/2);
     inlinePhotos.push(ip);renderInlinePhoto(ip,wrap,W,H);
     scheduleSave();showToast('Photo placed — drag to reposition, resize with handle','tok');
+    uploadDocPhoto(ip, dataUrl, 'ff_inline_'+ip.id+'.jpg');
   };
   img.src=dataUrl;
 }
@@ -1129,7 +1130,7 @@ function addPhotoCard(obj){
   const imgDiv=card.querySelector('.pcard-img');
   const cap=card.querySelector('.pcard-cap');
   // Make image tappable to pick file
-  imgDiv.addEventListener('click',()=>{const fi=document.createElement('input');fi.type='file';fi.accept='image/*';fi.onchange=function(){const f=this.files[0];if(!f)return;const rd=new FileReader();rd.onload=ev=>{fixImgOrientation(ev.target.result,corrected=>{obj.dataUrl=corrected;obj.mimeType='image/jpeg';imgDiv.innerHTML=`<img src="${corrected}" alt="">`;scheduleSave();});};rd.readAsDataURL(f);};fi.click();});
+  imgDiv.addEventListener('click',()=>{const fi=document.createElement('input');fi.type='file';fi.accept='image/*';fi.onchange=function(){const f=this.files[0];if(!f)return;const rd=new FileReader();rd.onload=ev=>{fixImgOrientation(ev.target.result,corrected=>{obj.dataUrl=corrected;obj.mimeType='image/jpeg';imgDiv.innerHTML=`<img src="${corrected}" alt="">`;scheduleSave();uploadDocPhoto(obj,corrected,'ff_page_'+obj.id+'.jpg');});};rd.readAsDataURL(f);};fi.click();});
   cap.addEventListener('input',()=>{obj.title=cap.value;scheduleSave();});
   card.querySelector('.pcard-del').addEventListener('click',()=>{card.remove();photoPages2=photoPages2.filter(p=>p.id!==id);scheduleSave();});
   document.getElementById('ptray-scroll').insertBefore(card,document.getElementById('pcard-add-btn'));
@@ -1141,6 +1142,19 @@ function fixImgOrientation(dataUrl,callback){
   img.onload=()=>{const c=document.createElement('canvas');c.width=img.naturalWidth;c.height=img.naturalHeight;c.getContext('2d').drawImage(img,0,0,c.width,c.height);document.body.removeChild(img);callback(c.toDataURL('image/jpeg',0.92));};
   img.onerror=()=>{document.body.removeChild(img);callback(dataUrl);};
   img.src=dataUrl;
+}
+
+// ── STORAGE UPLOAD (uploads dataUrl blob to doc-photos, replaces obj.dataUrl with URL) ──
+async function uploadDocPhoto(obj, dataUrl, storageKey) {
+  if (!APP.hubDocId) return;
+  try {
+    const blob = await (await fetch(dataUrl)).blob();
+    const { error } = await SB.storage.from('doc-photos').upload(`${APP.hubDocId}/${storageKey}`, blob, { contentType:'image/jpeg', upsert:true });
+    if (error) return;
+    const { data:{ publicUrl } } = SB.storage.from('doc-photos').getPublicUrl(`${APP.hubDocId}/${storageKey}`);
+    obj.dataUrl = publicUrl;
+    scheduleSave();
+  } catch(e) {}
 }
 
 // ── AUTO SAVE ──
@@ -1284,6 +1298,7 @@ async function buildExportPDF(){
         if(!ip.dataUrl)continue;
         try{
           const img=new Image();
+          if(!ip.dataUrl.startsWith('data:'))img.crossOrigin='anonymous';
           await new Promise((res,rej)=>{img.onload=res;img.onerror=rej;img.src=ip.dataUrl;});
           ctx2d.drawImage(img,ip.x/100*cv.width,ip.y/100*cv.height,ip.w/100*cv.width,ip.h/100*cv.height);
         }catch(e){}
@@ -1302,8 +1317,14 @@ async function buildExportPDF(){
       const pg=newDoc.addPage([PDFLib.PageSizes.A4[0],PDFLib.PageSizes.A4[1]]);
       const W=pg.getWidth(),H=pg.getHeight();
       pg.drawRectangle({x:0,y:0,width:W,height:H,color:rgb(1,1,1)});
-      const ib=Uint8Array.from(atob(pb.dataUrl.split(',')[1]),c=>c.charCodeAt(0));
-      const img=pb.dataUrl.startsWith('data:image/png')?await newDoc.embedPng(ib):await newDoc.embedJpg(ib);
+      let ib;
+      if(pb.dataUrl.startsWith('data:')){
+        ib=Uint8Array.from(atob(pb.dataUrl.split(',')[1]),c=>c.charCodeAt(0));
+      }else{
+        ib=new Uint8Array(await(await fetch(pb.dataUrl)).arrayBuffer());
+      }
+      const ispng=pb.dataUrl.startsWith('data:image/png');
+      const img=ispng?await newDoc.embedPng(ib):await newDoc.embedJpg(ib);
       const dims=img.scaleToFit(W,H);
       pg.drawImage(img,{x:(W-dims.width)/2,y:(H-dims.height)/2,width:dims.width,height:dims.height});
       const title=pb.title||`Photo ${pb.id}`;const barH=30;
