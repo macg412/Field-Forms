@@ -722,6 +722,62 @@ let undoStack={};
 let markupMode=false;
 let mkTool='pen', mkColor='#000000', mkSize=3;
 let isDrawing=false, drawStart={x:0,y:0}, currentStroke=null;
+
+// ── Per-form custom overlays (for fields not encoded as PDF Widget annotations) ──
+// Coordinates are in PDF.js viewport space at scale=1 (vx=left, vy=baseline-bottom, h=char height so top=vy-h)
+const FORM_OVERLAYS={
+  '122F007':{
+    1:[
+      // [INSERT UNIQUE REF#] text field in title
+      {type:'text', fid:'ndr_ref',       vx:375.7,vy:79.6, w:91.4,h:9,  placeholder:'Unique Ref #'},
+      // Temp / Perm repair type (radio group)
+      {type:'check',fid:'ndr_repair',    vx:145.3,vy:222.7,w:7,h:8,rg:'ndr_repair',val:'Temp'},
+      {type:'check',fid:'ndr_repair',    vx:175.0,vy:222.7,w:7,h:8,rg:'ndr_repair',val:'Perm'},
+      // Damage caused by – if unknown
+      {type:'check',fid:'ndr_unknown',   vx:243.1,vy:271.6,w:8,h:9},
+      // Title salutation (radio group)
+      {type:'check',fid:'ndr_title',     vx:152.2,vy:285.5,w:7,h:8,rg:'ndr_title',val:'Ms'},
+      {type:'check',fid:'ndr_title',     vx:200.2,vy:285.5,w:7,h:8,rg:'ndr_title',val:'Mr'},
+      {type:'check',fid:'ndr_title',     vx:253.1,vy:285.5,w:7,h:8,rg:'ndr_title',val:'Mrs'},
+      // Damage cause (independent ticks)
+      {type:'check',fid:'ndr_dmg_plant', vx:211.3,vy:372.6,w:7,h:8},
+      {type:'check',fid:'ndr_dmg_hand',  vx:303.2,vy:372.6,w:7,h:8},
+      {type:'check',fid:'ndr_dmg_delib', vx:443.3,vy:372.6,w:7,h:8},
+      {type:'check',fid:'ndr_dmg_veh',   vx:509.4,vy:372.6,w:7,h:8},
+      // In attendance (radio groups)
+      {type:'check',fid:'ndr_fire',      vx:85.8, vy:468.5,w:7,h:8,rg:'ndr_fire',val:'Yes'},
+      {type:'check',fid:'ndr_fire',      vx:114.2,vy:468.5,w:7,h:8,rg:'ndr_fire',val:'No'},
+      {type:'check',fid:'ndr_amb',       vx:206.2,vy:468.5,w:7,h:8,rg:'ndr_amb', val:'Yes'},
+      {type:'check',fid:'ndr_amb',       vx:234.6,vy:468.5,w:7,h:8,rg:'ndr_amb', val:'No'},
+      {type:'check',fid:'ndr_police',    vx:326.6,vy:468.5,w:7,h:8,rg:'ndr_police',val:'Yes'},
+      {type:'check',fid:'ndr_police',    vx:355.1,vy:468.5,w:7,h:8,rg:'ndr_police',val:'No'},
+      // Notifiable incident
+      {type:'check',fid:'ndr_notif',     vx:159.7,vy:580.8,w:7,h:8,rg:'ndr_notif',val:'Yes'},
+      {type:'check',fid:'ndr_notif',     vx:201.4,vy:580.8,w:7,h:8,rg:'ndr_notif',val:'No'},
+      // Injury sustained
+      {type:'check',fid:'ndr_injury',    vx:159.7,vy:591.6,w:7,h:8,rg:'ndr_injury',val:'Yes'},
+      {type:'check',fid:'ndr_injury',    vx:201.4,vy:591.6,w:7,h:8,rg:'ndr_injury',val:'No'},
+      {type:'check',fid:'ndr_injury',    vx:262.0,vy:591.6,w:7,h:8,rg:'ndr_injury',val:'Unknown'},
+      // Plans on site
+      {type:'check',fid:'ndr_plans',     vx:159.7,vy:602.4,w:7,h:8,rg:'ndr_plans',val:'Yes'},
+      {type:'check',fid:'ndr_plans',     vx:201.4,vy:602.4,w:7,h:8,rg:'ndr_plans',val:'No'},
+      {type:'check',fid:'ndr_plans',     vx:244.0,vy:602.4,w:7,h:8,rg:'ndr_plans',val:'NA'},
+      // Mark out
+      {type:'check',fid:'ndr_markout',   vx:159.7,vy:613.1,w:7,h:8,rg:'ndr_markout',val:'Yes'},
+      {type:'check',fid:'ndr_markout',   vx:201.4,vy:613.1,w:7,h:8,rg:'ndr_markout',val:'No'},
+      {type:'check',fid:'ndr_markout',   vx:244.0,vy:613.1,w:7,h:8,rg:'ndr_markout',val:'NA'},
+      // Trial holes dug
+      {type:'check',fid:'ndr_holes',     vx:159.7,vy:623.9,w:7,h:8,rg:'ndr_holes',val:'Yes'},
+      {type:'check',fid:'ndr_holes',     vx:201.4,vy:623.9,w:7,h:8,rg:'ndr_holes',val:'No'},
+      {type:'check',fid:'ndr_holes',     vx:244.0,vy:623.9,w:7,h:8,rg:'ndr_holes',val:'NA'},
+      // High load
+      {type:'check',fid:'ndr_highload',  vx:159.7,vy:634.7,w:7,h:8,rg:'ndr_highload',val:'Yes'},
+      // Tree(s)
+      {type:'check',fid:'ndr_trees',     vx:159.7,vy:656.3,w:7,h:8,rg:'ndr_trees',val:'Yes'},
+      {type:'check',fid:'ndr_trees',     vx:201.4,vy:656.3,w:7,h:8,rg:'ndr_trees',val:'No'},
+    ]
+  }
+};
 // Inline photos placed on PDF pages
 let inlinePhotos=[];  // [{id,pageNum,x%,y%,w%,h%,dataUrl}]
 // Photo pages (bottom tray with captions)
@@ -782,6 +838,7 @@ async function renderPages(){
       const ov=makeFieldOverlay(ann,logVp);
       if(ov)wrap.appendChild(ov);
     }
+    injectFormOverlays(APP.currentTemplate?.id,p,wrap,logVp.scale);
     // Draw canvas — also at physical resolution for crisp markup strokes
     const dc=document.createElement('canvas');
     dc.className='draw-canvas';dc.dataset.page=p;
@@ -848,6 +905,46 @@ function makeFieldOverlay(ann,vp){
     wrap.appendChild(el);return wrap;
   }
   return null;
+}
+
+function injectFormOverlays(tplId,pageNum,wrap,zoom){
+  const defs=(FORM_OVERLAYS[tplId]||{})[pageNum];
+  if(!defs)return;
+  for(const d of defs){
+    const left=d.vx*zoom;
+    const top=(d.vy-d.h)*zoom;
+    const cw=Math.max(d.w*zoom,12);
+    const ch=Math.max(d.h*zoom,12);
+    const wrapper=document.createElement('div');
+    wrapper.className='fov';
+    wrapper.style.cssText=`left:${left}px;top:${top}px;width:${cw}px;height:${ch}px;`;
+    if(d.type==='text'){
+      const el=document.createElement('input');
+      el.type='text';el.className='fov-text';
+      el.style.fontSize=Math.min(Math.max(ch*0.58,9),16)+'px';
+      el.value=fieldVals[d.fid]!=null?fieldVals[d.fid]:'';
+      if(d.placeholder)el.placeholder=d.placeholder;
+      el.addEventListener('input',()=>{fieldVals[d.fid]=el.value;scheduleSave();});
+      wrapper.appendChild(el);
+    }else if(d.type==='check'){
+      const el=document.createElement('div');
+      el.className='fov-check';
+      el.style.fontSize=Math.min(ch*0.68,16)+'px';
+      const on=d.rg?fieldVals[d.rg]===d.val:fieldVals[d.fid]===true;
+      if(on){el.classList.add('on');el.textContent='✓';}
+      if(d.rg){
+        el.dataset.rg=d.rg;el.dataset.val=d.val;
+        el.addEventListener('click',()=>{
+          document.querySelectorAll(`.fov-check[data-rg="${CSS.escape(d.rg)}"]`).forEach(o=>{o.classList.remove('on');o.textContent='';});
+          el.classList.add('on');el.textContent='✓';fieldVals[d.rg]=d.val;scheduleSave();
+        });
+      }else{
+        el.addEventListener('click',()=>{const n=el.classList.toggle('on');el.textContent=n?'✓':'';fieldVals[d.fid]=n;scheduleSave();});
+      }
+      wrapper.appendChild(el);
+    }
+    wrap.appendChild(wrapper);
+  }
 }
 
 // ── MARKUP ENGINE (exact same as pc-asbuilt) ──
@@ -1306,6 +1403,22 @@ async function buildExportPDF(){
         }else if(ann.fieldType==='Btn'&&ann.radioButton&&v===ann.buttonValue){
           ctx2d.fillStyle='#111';ctx2d.beginPath();
           ctx2d.arc(left+w/2,top+h/2,Math.min(w,h)/3,0,Math.PI*2);ctx2d.fill();
+        }
+      }
+      // Draw form-specific custom overlays (non-annotation fields like NDR checkboxes)
+      const custDefs=(FORM_OVERLAYS[APP.currentTemplate?.id]||{})[p];
+      if(custDefs){
+        for(const d of custDefs){
+          const cl=d.vx*scale,ct=(d.vy-d.h)*scale,cw=d.w*scale,ch=d.h*scale;
+          if(d.type==='text'){
+            const v=fieldVals[d.fid]||'';
+            ctx2d.save();ctx2d.fillStyle='#fff';ctx2d.fillRect(cl,ct,cw,ch);
+            if(v){const fs=Math.min(Math.max(ch*0.58,15),27);ctx2d.font=`${fs}px Arial,Helvetica,sans-serif`;ctx2d.fillStyle='#111';ctx2d.textBaseline='middle';ctx2d.fillText(v,cl+2,ct+ch/2);}
+            ctx2d.restore();
+          }else if(d.type==='check'){
+            const on=d.rg?fieldVals[d.rg]===d.val:fieldVals[d.fid]===true;
+            if(on){ctx2d.save();ctx2d.fillStyle='#fff';ctx2d.fillRect(cl,ct,cw,ch);ctx2d.font=`bold ${Math.min(ch*0.68,20)}px Arial,Helvetica,sans-serif`;ctx2d.fillStyle='#111';ctx2d.textAlign='center';ctx2d.textBaseline='middle';ctx2d.fillText('✓',cl+cw/2,ct+ch/2);ctx2d.textAlign='left';ctx2d.restore();}
+          }
         }
       }
       // Composite draw strokes
