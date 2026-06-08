@@ -256,12 +256,12 @@ input.mkslider{width:80px;height:4px;accent-color:#5c2d91;cursor:pointer;flex-sh
 
 /* Field overlays — exact same as pc-asbuilt */
 .fov{position:absolute;touch-action:manipulation;}
-.fov-text{width:100%;height:100%;background:rgba(200,220,255,.18);border:1px solid rgba(92,45,145,.2);border-radius:2px;font-family:var(--fn);color:#111;padding:0 3px;outline:none;resize:none;overflow:hidden;transition:background .12s,border-color .12s;font-size:inherit;}
+.fov-text{width:100%;height:100%;background:#fff;border:1px solid rgba(92,45,145,.2);border-radius:2px;font-family:var(--fn);color:#111;padding:0 3px;outline:none;resize:none;overflow:hidden;transition:background .12s,border-color .12s;font-size:inherit;}
 .fov-text:focus{background:rgba(200,220,255,.4);border-color:rgba(92,45,145,.7);}
-.fov-check{width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:rgba(200,220,255,.12);border:1px solid rgba(92,45,145,.18);border-radius:2px;color:#5c2d91;font-weight:800;cursor:pointer;user-select:none;transition:background .12s;font-size:inherit;}
+.fov-check{width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:#fff;border:1px solid rgba(92,45,145,.18);border-radius:2px;color:#5c2d91;font-weight:800;cursor:pointer;user-select:none;transition:background .12s;font-size:inherit;}
 .fov-check:hover,.fov-check:active{background:rgba(200,220,255,.32);}
 .fov-check.on{background:rgba(92,45,145,.08);border-color:#5c2d91;}
-.fov-select{width:100%;height:100%;background:rgba(200,220,255,.18);border:1px solid rgba(92,45,145,.2);border-radius:2px;font-family:var(--fn);color:#111;padding:0 2px;outline:none;cursor:pointer;appearance:none;font-size:inherit;}
+.fov-select{width:100%;height:100%;background:#fff;border:1px solid rgba(92,45,145,.2);border-radius:2px;font-family:var(--fn);color:#111;padding:0 2px;outline:none;cursor:pointer;appearance:none;font-size:inherit;}
 .fov-select:focus{background:rgba(200,220,255,.4);border-color:rgba(92,45,145,.7);}
 
 /* ── INLINE PHOTO OVERLAYS (draggable photos on PDF pages) ── */
@@ -773,7 +773,7 @@ async function renderPages(){
     const canvas=document.createElement('canvas');canvas.className='bgcv';
     canvas.width=hiVp.width;canvas.height=hiVp.height;
     canvas.style.width=cssW+'px';canvas.style.height=cssH+'px';
-    await page.render({canvasContext:canvas.getContext('2d'),viewport:hiVp}).promise;
+    await page.render({canvasContext:canvas.getContext('2d'),viewport:hiVp,annotationMode:1}).promise;
     wrap.appendChild(canvas);
     // Field overlays — positioned in CSS pixels using logical viewport
     const anns=await page.getAnnotations();
@@ -842,7 +842,8 @@ function makeFieldOverlay(ann,vp){
   }
   if(ann.fieldType==='Ch'){
     const el=document.createElement('select');el.className='fov-select';el.style.fontSize=fs;
-    el.innerHTML='<option value="">—</option>'+(ann.options||[]).map(o=>{const v=typeof o==='string'?o:(o.exportValue||'');const l=typeof o==='string'?o:(o.displayValue||v);return`<option value="${v}"${fieldVals[fid]===v?' selected':''}>${l}</option>`;}).join('');
+    const curVal=fieldVals[fid]!=null?fieldVals[fid]:(ann.fieldValue||'');
+    el.innerHTML='<option value="">—</option>'+(ann.options||[]).map(o=>{const v=typeof o==='string'?o:(o.exportValue||'');const l=typeof o==='string'?o:(o.displayValue||v);return`<option value="${v}"${curVal===v?' selected':''}>${l}</option>`;}).join('');
     el.addEventListener('change',()=>{fieldVals[fid]=el.value;scheduleSave();});
     wrap.appendChild(el);return wrap;
   }
@@ -1275,18 +1276,19 @@ async function buildExportPDF(){
       cv.width=vp.width;cv.height=vp.height;
       const ctx2d=cv.getContext('2d');
       ctx2d.fillStyle='#fff';ctx2d.fillRect(0,0,cv.width,cv.height);
-      await page.render({canvasContext:ctx2d,viewport:vp}).promise;
+      await page.render({canvasContext:ctx2d,viewport:vp,annotationMode:1}).promise;
       // Draw field values onto canvas
       const anns=await page.getAnnotations();
       for(const ann of anns){
         if(ann.subtype!=='Widget')continue;
         const fid=ann.fieldName||ann.id;
-        const v=fieldVals[fid];
+        const v=fieldVals[fid]!=null?fieldVals[fid]:(ann.fieldValue||'');
         const[vx1,vy1,vx2,vy2]=vp.convertToViewportRectangle(ann.rect);
         const left=Math.min(vx1,vx2),top=Math.min(vy1,vy2),w=Math.abs(vx2-vx1),h=Math.abs(vy2-vy1);
         if(w<2||h<2)continue;
-        if(ann.fieldType==='Tx'&&v!==undefined&&v!==null&&v!==''){
+        if((ann.fieldType==='Tx'||ann.fieldType==='Ch')&&v!==''){
           ctx2d.save();
+          ctx2d.fillStyle='#fff';ctx2d.fillRect(left,top,w,h);
           ctx2d.beginPath();ctx2d.rect(left+1,top+1,Math.max(0,w-2),Math.max(0,h-2));ctx2d.clip();
           const fs=Math.min(Math.max(h*0.58,15),27);
           ctx2d.font=`${fs}px Arial,Helvetica,sans-serif`;
