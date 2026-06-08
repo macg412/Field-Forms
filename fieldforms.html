@@ -829,7 +829,7 @@ async function renderPages(){
     const canvas=document.createElement('canvas');canvas.className='bgcv';
     canvas.width=hiVp.width;canvas.height=hiVp.height;
     canvas.style.width=cssW+'px';canvas.style.height=cssH+'px';
-    await page.render({canvasContext:canvas.getContext('2d'),viewport:hiVp,annotationMode:1}).promise;
+    await page.render({canvasContext:canvas.getContext('2d'),viewport:hiVp,annotationMode:0}).promise;
     wrap.appendChild(canvas);
     // Field overlays — positioned in CSS pixels using logical viewport
     const anns=await page.getAnnotations();
@@ -1373,7 +1373,7 @@ async function buildExportPDF(){
       cv.width=vp.width;cv.height=vp.height;
       const ctx2d=cv.getContext('2d');
       ctx2d.fillStyle='#fff';ctx2d.fillRect(0,0,cv.width,cv.height);
-      await page.render({canvasContext:ctx2d,viewport:vp,annotationMode:1}).promise;
+      await page.render({canvasContext:ctx2d,viewport:vp,annotationMode:0}).promise;
       // Draw field values onto canvas
       const anns=await page.getAnnotations();
       for(const ann of anns){
