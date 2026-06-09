@@ -303,7 +303,14 @@ input.mkslider{width:80px;height:4px;accent-color:#5c2d91;cursor:pointer;flex-sh
 .sgal-thumb img{width:100%;height:100%;object-fit:cover;display:block;pointer-events:none;}
 .sgal-pp-btn{position:absolute;bottom:3px;right:3px;background:rgba(0,0,0,.58);color:#fff;border:none;border-radius:4px;font-size:9px;padding:3px 5px;cursor:pointer;line-height:1.4;touch-action:manipulation;}
 .sgal-pp-btn:active{background:rgba(59,130,246,.9);}
+.sgal-prev-btn{position:absolute;bottom:3px;left:3px;background:rgba(0,0,0,.58);color:#fff;border:none;border-radius:4px;font-size:11px;padding:2px 5px;cursor:pointer;line-height:1.4;touch-action:manipulation;}
+.sgal-prev-btn:active{background:rgba(59,130,246,.9);}
 .sgal-empty{text-align:center;padding:28px 16px;color:var(--tx3);font-size:13px;}
+.sgal-lightbox{display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.88);align-items:center;justify-content:center;flex-direction:column;}
+.sgal-lightbox.open{display:flex;}
+.sgal-lightbox img{max-width:92vw;max-height:82vh;border-radius:8px;object-fit:contain;box-shadow:0 4px 32px rgba(0,0,0,.6);}
+.sgal-lightbox-close{margin-top:14px;background:rgba(255,255,255,.15);color:#fff;border:none;border-radius:8px;padding:8px 28px;font-size:15px;cursor:pointer;letter-spacing:.02em;}
+.sgal-lightbox-close:hover{background:rgba(255,255,255,.28);}
 /* Drop-over highlight on PDF page wrappers */
 .pw.file-drop-over{outline:3px dashed #3b82f6;outline-offset:-3px;}
 .pw.file-drop-over::after{content:'';position:absolute;inset:0;background:rgba(59,130,246,.06);z-index:20;pointer-events:none;}
@@ -514,10 +521,16 @@ input.mkslider{width:80px;height:4px;accent-color:#5c2d91;cursor:pointer;flex-sh
   <div class="md">
     <div class="mdh"></div>
     <div class="mdt">🗂 Site Photos</div>
-    <div style="font-size:11px;color:var(--tx3);margin-bottom:10px;">Tap a photo to place it on the PDF. Use the 🖼 button to add it to Photo Pages.</div>
+    <div style="font-size:11px;color:var(--tx3);margin-bottom:10px;">Tap a photo to place it on the PDF. Use 🖼 to add to Photo Pages, 🔍 to preview.</div>
     <div id="sgal-grid" class="sgal-grid"></div>
     <button class="btn bg bf" style="margin-top:12px;" onclick="closeM('msgal')">Close</button>
   </div>
+</div>
+
+<!-- Photo Preview Lightbox -->
+<div class="sgal-lightbox" id="sgal-lightbox" onclick="closeSitePhotoPreview()">
+  <img id="sgal-lightbox-img" src="" alt="Preview">
+  <button class="sgal-lightbox-close" onclick="closeSitePhotoPreview()">Close</button>
 </div>
 
 <!-- Hidden inputs -->
@@ -1044,6 +1057,7 @@ async function openSiteGallery(){
   grid.innerHTML=photos.map((p,i)=>`
     <div class="sgal-thumb" data-idx="${i}">
       <img src="${p.public_url}" loading="lazy">
+      <button class="sgal-prev-btn" title="Preview photo" onclick="event.stopPropagation();openSitePhotoPreview('${p.public_url}')">🔍</button>
       <button class="sgal-pp-btn" title="Add to Photo Pages" onclick="event.stopPropagation();addGalleryPhotoToPages('${p.public_url}')">🖼</button>
     </div>`).join('');
   grid.querySelectorAll('.sgal-thumb').forEach((thumb,i)=>{
@@ -1059,6 +1073,17 @@ async function addGalleryPhotoToPages(url){
     document.getElementById('ptray').classList.add('open');
     scheduleSave();showToast('Photo added to Photo Pages','tok');
   });
+}
+
+function openSitePhotoPreview(url){
+  const lb=document.getElementById('sgal-lightbox');
+  document.getElementById('sgal-lightbox-img').src=url;
+  lb.classList.add('open');
+}
+function closeSitePhotoPreview(){
+  const lb=document.getElementById('sgal-lightbox');
+  lb.classList.remove('open');
+  document.getElementById('sgal-lightbox-img').src='';
 }
 
 function loadGalleryImage(url,cb){
