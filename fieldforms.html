@@ -968,9 +968,11 @@ document.addEventListener('DOMContentLoaded',()=>{
   ptrayScroll.addEventListener('dragleave',e=>{if(!ptrayScroll.contains(e.relatedTarget))ptrayScroll.classList.remove('file-drop-over');});
   ptrayScroll.addEventListener('drop',e=>{
     e.preventDefault();ptrayScroll.classList.remove('file-drop-over');
+    const _df=e.dataTransfer.files&&[...e.dataTransfer.files].find(f=>f.type.startsWith('image/'));
+    const _dfName=_df?fileBaseName(_df.name):'';
     loadImageFromTransfer(e.dataTransfer).then(dataUrl=>{
       if(!dataUrl)return;
-      photoN++;const obj={id:photoN,title:'',dataUrl,mimeType:'image/jpeg'};
+      photoN++;const obj={id:photoN,title:_dfName,dataUrl,mimeType:'image/jpeg'};
       photoPages2.push(obj);addPhotoCard(obj);
       document.getElementById('ptray').classList.add('open');
       scheduleSave();showToast('Photo added to Photo Pages','tok');
@@ -1049,26 +1051,26 @@ async function openSiteGallery(){
   const grid=document.getElementById('sgal-grid');
   grid.innerHTML='<div class="sgal-empty">Loading…</div>';
   openM('msgal');
-  const{data:photos=[],error}=await SB.from('site_photos').select('id,public_url').eq('site_id',siteId).order('sort_order').order('created_at');
+  const{data:photos=[],error}=await SB.from('site_photos').select('id,public_url,caption').eq('site_id',siteId).order('sort_order').order('created_at');
   if(error||!photos.length){
     grid.innerHTML=`<div class="sgal-empty">${error?'Could not load photos.':'No photos in this site\'s gallery yet.'}</div>`;
     return;
   }
   grid.innerHTML=photos.map((p,i)=>`
-    <div class="sgal-thumb" data-idx="${i}">
+    <div class="sgal-thumb" data-idx="${i}" data-cap="${(p.caption||'').replace(/"/g,'&quot;')}">
       <img src="${p.public_url}" loading="lazy">
       <button class="sgal-prev-btn" title="Preview photo" onclick="event.stopPropagation();openSitePhotoPreview('${p.public_url}')">🔍</button>
-      <button class="sgal-pp-btn" title="Add to Photo Pages" onclick="event.stopPropagation();addGalleryPhotoToPages('${p.public_url}')">🖼</button>
+      <button class="sgal-pp-btn" title="Add to Photo Pages" onclick="event.stopPropagation();addGalleryPhotoToPages('${p.public_url}',this.closest('.sgal-thumb').dataset.cap)">🖼</button>
     </div>`).join('');
   grid.querySelectorAll('.sgal-thumb').forEach((thumb,i)=>{
     thumb.addEventListener('click',()=>{closeM('msgal');loadGalleryImage(photos[i].public_url,enterPlacementMode);});
   });
 }
 
-async function addGalleryPhotoToPages(url){
+async function addGalleryPhotoToPages(url,caption=''){
   loadGalleryImage(url,dataUrl=>{
     photoN++;
-    const obj={id:photoN,title:'',dataUrl,mimeType:'image/jpeg'};
+    const obj={id:photoN,title:caption||'',dataUrl,mimeType:'image/jpeg'};
     photoPages2.push(obj);addPhotoCard(obj);
     document.getElementById('ptray').classList.add('open');
     scheduleSave();showToast('Photo added to Photo Pages','tok');
@@ -1146,6 +1148,7 @@ function makePhovDraggable(el,ip,wrap){
 }
 
 // ── PHOTO TRAY (captioned photo pages) ──
+function fileBaseName(name){return(name||'').replace(/\.[^.]+$/,'').replace(/_/g,' ').trim();}
 function clearPhotoTray(){document.getElementById('ptray-scroll').querySelectorAll('.pcard').forEach(e=>e.remove());}
 function addPhotoCard(obj){
   const id=obj.id;
@@ -1154,7 +1157,7 @@ function addPhotoCard(obj){
   const imgDiv=card.querySelector('.pcard-img');
   const cap=card.querySelector('.pcard-cap');
   // Make image tappable to pick file
-  imgDiv.addEventListener('click',()=>{const fi=document.createElement('input');fi.type='file';fi.accept='image/*';fi.onchange=function(){const f=this.files[0];if(!f)return;const rd=new FileReader();rd.onload=ev=>{fixImgOrientation(ev.target.result,corrected=>{obj.dataUrl=corrected;obj.mimeType='image/jpeg';imgDiv.innerHTML=`<img src="${corrected}" alt="">`;scheduleSave();});};rd.readAsDataURL(f);};fi.click();});
+  imgDiv.addEventListener('click',()=>{const fi=document.createElement('input');fi.type='file';fi.accept='image/*';fi.onchange=function(){const f=this.files[0];if(!f)return;if(!obj.title){obj.title=fileBaseName(f.name);cap.value=obj.title;}const rd=new FileReader();rd.onload=ev=>{fixImgOrientation(ev.target.result,corrected=>{obj.dataUrl=corrected;obj.mimeType='image/jpeg';imgDiv.innerHTML=`<img src="${corrected}" alt="">`;scheduleSave();});};rd.readAsDataURL(f);};fi.click();});
   cap.addEventListener('input',()=>{obj.title=cap.value;scheduleSave();});
   card.querySelector('.pcard-del').addEventListener('click',()=>{card.remove();photoPages2=photoPages2.filter(p=>p.id!==id);scheduleSave();});
   document.getElementById('ptray-scroll').insertBefore(card,document.getElementById('pcard-add-btn'));
