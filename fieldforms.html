@@ -231,6 +231,7 @@ body{background:var(--bg);color:var(--tx);font-family:var(--fn);font-size:14px;d
 .mkbtn{display:flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:8px;border:2px solid transparent;background:#fff;cursor:pointer;font-size:16px;transition:.12s;flex-shrink:0;touch-action:manipulation;}
 .mkbtn:hover,.mkbtn:active{border-color:#5c2d91;}
 .mkbtn.active{border-color:#5c2d91;background:#ede7f6;}
+#mk-dash.active{border-color:#5c2d91;background:#ede7f6;font-weight:700;}
 .mksep{width:1px;height:28px;background:#c5d0f0;flex-shrink:0;margin:0 2px;}
 .mklbl{font-size:10px;color:#717185;font-weight:600;white-space:nowrap;flex-shrink:0;}
 input.mkcolor{width:32px;height:32px;border-radius:50%;border:3px solid #ccc;cursor:pointer;flex-shrink:0;appearance:none;padding:0;background:none;touch-action:manipulation;}
@@ -376,11 +377,18 @@ input.mkslider{width:80px;height:4px;accent-color:#5c2d91;cursor:pointer;flex-sh
 
   <!-- Markup toolbar -->
   <div class="mkbar" id="mkbar">
-    <button class="mkbtn active" id="mk-pen"    title="Pen">✏️</button>
-    <button class="mkbtn"        id="mk-hi"     title="Highlighter">🖍</button>
-    <button class="mkbtn"        id="mk-eraser" title="Eraser">⬜</button>
-    <button class="mkbtn"        id="mk-arrow"  title="Arrow">↗</button>
-    <button class="mkbtn"        id="mk-rect"   title="Rectangle">▭</button>
+    <button class="mkbtn active" id="mk-pen"      title="Pen">✏️</button>
+    <button class="mkbtn"        id="mk-hi"       title="Highlighter">🖍</button>
+    <button class="mkbtn"        id="mk-eraser"   title="Eraser">⌫</button>
+    <button class="mkbtn"        id="mk-arrow"    title="Arrow">↗</button>
+    <button class="mkbtn"        id="mk-line"     title="Straight Line">—</button>
+    <button class="mkbtn"        id="mk-polyline" title="Multi-point Line — click points, click tool again or double-click to finish" style="font-size:13px;font-weight:700;">╱╲</button>
+    <button class="mkbtn"        id="mk-rect"     title="Rectangle">▭</button>
+    <button class="mkbtn"        id="mk-circle"   title="Circle / Ellipse">○</button>
+    <button class="mkbtn"        id="mk-cloud"    title="Cloud">☁</button>
+    <button class="mkbtn"        id="mk-text"     title="Insert Text — click to place" style="font-weight:700;font-size:14px;">T</button>
+    <button class="mkbtn"        id="mk-fill"     title="Fill Shape — click inside a closed shape to fill it" style="font-size:13px;">◈</button>
+    <button class="mkbtn"        id="mk-dash"     title="Toggle dashed stroke">╌</button>
     <div class="mksep"></div>
     <span class="mklbl">Color</span>
     <input class="mkcolor" type="color" id="mk-color-pick" value="#000000" title="Stroke colour">
@@ -733,8 +741,9 @@ let fieldVals={};
 let drawData={};     // pageNum(1-based) -> [strokeObj, ...]
 let undoStack={};
 let markupMode=false;
-let mkTool='pen', mkColor='#000000', mkSize=3;
+let mkTool='pen', mkColor='#000000', mkSize=3, mkDashed=false;
 let isDrawing=false, drawStart={x:0,y:0}, currentStroke=null;
+let polylinePoints=[],polylinePageNum=null,polylineDC=null;
 // Inline photos placed on PDF pages
 let inlinePhotos=[];  // [{id,pageNum,x%,y%,w%,h%,dataUrl}]
 // Photo pages (bottom tray with captions)
@@ -877,22 +886,33 @@ function applyMarkupMode(){
   document.querySelectorAll('.phov').forEach(ph=>{ph.style.pointerEvents=markupMode?'none':'auto';});
 }
 function setEdTool(t){
+  if(mkTool==='polyline'&&polylinePoints.length>=2)finalizePolyline(polylinePageNum,polylineDC);
+  polylinePoints=[];polylinePageNum=null;polylineDC=null;
+  const existing=document.getElementById('mk-text-overlay');if(existing)existing.remove();
   mkTool=t;
-  const map={pen:'mk-pen',hi:'mk-hi',eraser:'mk-eraser',arrow:'mk-arrow',rect:'mk-rect'};
-  document.querySelectorAll('.mkbtn').forEach(b=>b.classList.remove('active'));
+  const map={pen:'mk-pen',hi:'mk-hi',eraser:'mk-eraser',arrow:'mk-arrow',line:'mk-line',polyline:'mk-polyline',rect:'mk-rect',circle:'mk-circle',cloud:'mk-cloud',text:'mk-text',fill:'mk-fill'};
+  document.querySelectorAll('.mkbtn').forEach(b=>{if(b.id!=='mk-dash')b.classList.remove('active');});
   const el=document.getElementById(map[t]);if(el)el.classList.add('active');
 }
 
 function bindDrawEvents(dc,pageNum){
   function getPos(e){const r=dc.getBoundingClientRect();const s=e.touches?e.touches[0]:e;return{x:(s.clientX-r.left)*(dc.width/r.width),y:(s.clientY-r.top)*(dc.height/r.height)};}
+  const SHAPE_TOOLS=new Set(['arrow','line','rect','circle','cloud']);
   function start(e){
-    if(!markupMode)return;if(e.cancelable)e.preventDefault();if(e.touches&&e.touches.length>1)return;
+    if(!markupMode)return;
+    if(mkTool==='polyline'||mkTool==='text'||mkTool==='fill')return;
+    if(e.cancelable)e.preventDefault();if(e.touches&&e.touches.length>1)return;
     isDrawing=true;const pos=getPos(e);drawStart={x:pos.x,y:pos.y};
     if(mkTool==='pen'||mkTool==='hi'||mkTool==='eraser'){currentStroke={tool:mkTool,color:mkColor,size:mkSize,points:[pos]};}
-    else{currentStroke={tool:mkTool,color:mkColor,size:mkSize,x1:pos.x,y1:pos.y,x2:pos.x,y2:pos.y};}
+    else if(SHAPE_TOOLS.has(mkTool)){currentStroke={tool:mkTool,color:mkColor,size:mkSize,dashed:mkDashed,x1:pos.x,y1:pos.y,x2:pos.x,y2:pos.y};}
   }
   function move(e){
-    if(!markupMode||!isDrawing)return;if(e.cancelable)e.preventDefault();if(e.touches&&e.touches.length>1){isDrawing=false;return;}
+    if(!markupMode)return;
+    if(mkTool==='polyline'&&polylinePoints.length&&polylinePageNum===pageNum){
+      if(e.cancelable)e.preventDefault();
+      const pos=getPos(e);redrawPage(pageNum,dc);drawPolylinePreview(dc.getContext('2d'),pos);return;
+    }
+    if(!isDrawing)return;if(e.cancelable)e.preventDefault();if(e.touches&&e.touches.length>1){isDrawing=false;return;}
     const pos=getPos(e);const ctx=dc.getContext('2d');
     if(mkTool==='pen'||mkTool==='hi'||mkTool==='eraser'){
       currentStroke.points.push(pos);
@@ -904,17 +924,40 @@ function bindDrawEvents(dc,pageNum){
       ctx.lineCap='round';ctx.lineJoin='round';ctx.beginPath();
       if(pts.length>=2){ctx.moveTo(pts[pts.length-2].x,pts[pts.length-2].y);ctx.lineTo(pos.x,pos.y);}
       ctx.stroke();ctx.restore();
-    }else{currentStroke.x2=pos.x;currentStroke.y2=pos.y;redrawPage(pageNum,dc);drawEdStroke(ctx,currentStroke,true);}
+    }else if(SHAPE_TOOLS.has(mkTool)){currentStroke.x2=pos.x;currentStroke.y2=pos.y;redrawPage(pageNum,dc);drawEdStroke(ctx,currentStroke,true);}
   }
   function end(e){
     if(!markupMode||!isDrawing)return;isDrawing=false;if(!currentStroke)return;
-    if(mkTool==='arrow'||mkTool==='rect')redrawPage(pageNum,dc);
+    if(SHAPE_TOOLS.has(mkTool))redrawPage(pageNum,dc);
     const ctx=dc.getContext('2d');drawEdStroke(ctx,currentStroke,false);
     if(!drawData[pageNum])drawData[pageNum]=[];if(!undoStack[pageNum])undoStack[pageNum]=[];
     drawData[pageNum].push(currentStroke);undoStack[pageNum].push(currentStroke);currentStroke=null;scheduleSave();
   }
+  function onClick(e){
+    if(!markupMode)return;
+    const pos=getPos(e);
+    if(mkTool==='polyline'){
+      if(e.detail===2)return;
+      if(!polylinePoints.length||polylinePageNum!==pageNum){polylinePoints=[pos];polylinePageNum=pageNum;polylineDC=dc;}
+      else{polylinePoints.push(pos);redrawPage(pageNum,dc);drawPolylinePreview(dc.getContext('2d'),null);}
+    }else if(mkTool==='text'){
+      if(e.cancelable)e.preventDefault();
+      showTextInput(dc,pageNum,pos);
+    }else if(mkTool==='fill'){
+      if(e.cancelable)e.preventDefault();
+      const strokes=(drawData[pageNum]||[]).slice().reverse();
+      for(const s of strokes){if(isPointInShape(s,pos)){s.fillColor=mkColor;redrawPage(pageNum,dc);scheduleSave();break;}}
+    }
+  }
+  function onDblClick(e){
+    if(!markupMode||mkTool!=='polyline')return;
+    if(e.cancelable)e.preventDefault();
+    // First click of dblclick (detail=1) already added the endpoint; second click was skipped
+    finalizePolyline(polylinePageNum,polylineDC);
+  }
   dc.addEventListener('mousedown',start);dc.addEventListener('mousemove',move);dc.addEventListener('mouseup',end);
   dc.addEventListener('touchstart',start,{passive:false});dc.addEventListener('touchmove',move,{passive:false});dc.addEventListener('touchend',end);
+  dc.addEventListener('click',onClick);dc.addEventListener('dblclick',onDblClick);
 }
 
 function drawEdStroke(ctx,stroke,preview=false){
@@ -923,18 +966,111 @@ function drawEdStroke(ctx,stroke,preview=false){
   else if(stroke.tool==='hi'){ctx.globalCompositeOperation='source-over';ctx.strokeStyle=hexAlpha(stroke.color,.35);ctx.lineWidth=stroke.size*3;}
   else{ctx.globalCompositeOperation='source-over';ctx.strokeStyle=stroke.color;ctx.lineWidth=stroke.size;}
   ctx.lineCap='round';ctx.lineJoin='round';
+  if(stroke.dashed)ctx.setLineDash([stroke.size*4,stroke.size*2]);else ctx.setLineDash([]);
   if(stroke.tool==='pen'||stroke.tool==='hi'||stroke.tool==='eraser'){
-    const pts=stroke.points;if(!pts||!pts.length)return;
+    const pts=stroke.points;if(!pts||!pts.length){ctx.restore();return;}
     ctx.beginPath();ctx.moveTo(pts[0].x,pts[0].y);for(let i=1;i<pts.length;i++)ctx.lineTo(pts[i].x,pts[i].y);ctx.stroke();
-  }else if(stroke.tool==='arrow'){drawEdArrow(ctx,stroke.x1,stroke.y1,stroke.x2,stroke.y2,stroke.color,stroke.size);}
-  else if(stroke.tool==='rect'){ctx.strokeStyle=stroke.color;ctx.lineWidth=stroke.size;ctx.strokeRect(stroke.x1,stroke.y1,stroke.x2-stroke.x1,stroke.y2-stroke.y1);}
+  }else if(stroke.tool==='arrow'){ctx.setLineDash([]);drawEdArrow(ctx,stroke.x1,stroke.y1,stroke.x2,stroke.y2,stroke.color,stroke.size);}
+  else if(stroke.tool==='line'){ctx.beginPath();ctx.moveTo(stroke.x1,stroke.y1);ctx.lineTo(stroke.x2,stroke.y2);ctx.stroke();}
+  else if(stroke.tool==='polyline'){
+    const pts=stroke.points;if(!pts||pts.length<2){ctx.restore();return;}
+    ctx.beginPath();ctx.moveTo(pts[0].x,pts[0].y);for(let i=1;i<pts.length;i++)ctx.lineTo(pts[i].x,pts[i].y);ctx.stroke();
+  }else if(stroke.tool==='rect'){
+    if(stroke.fillColor){ctx.setLineDash([]);ctx.fillStyle=hexAlpha(stroke.fillColor,.35);ctx.fillRect(stroke.x1,stroke.y1,stroke.x2-stroke.x1,stroke.y2-stroke.y1);}
+    if(stroke.dashed)ctx.setLineDash([stroke.size*4,stroke.size*2]);else ctx.setLineDash([]);
+    ctx.strokeRect(stroke.x1,stroke.y1,stroke.x2-stroke.x1,stroke.y2-stroke.y1);
+  }else if(stroke.tool==='circle'){
+    const crx=Math.abs(stroke.x2-stroke.x1)/2,cry=Math.abs(stroke.y2-stroke.y1)/2;
+    const ccx=(stroke.x1+stroke.x2)/2,ccy=(stroke.y1+stroke.y2)/2;
+    ctx.beginPath();ctx.ellipse(ccx,ccy,Math.max(1,crx),Math.max(1,cry),0,0,Math.PI*2);
+    if(stroke.fillColor){ctx.setLineDash([]);ctx.fillStyle=hexAlpha(stroke.fillColor,.35);ctx.fill();}
+    if(stroke.dashed)ctx.setLineDash([stroke.size*4,stroke.size*2]);else ctx.setLineDash([]);
+    ctx.stroke();
+  }else if(stroke.tool==='cloud'){
+    drawEdCloud(ctx,stroke.x1,stroke.y1,stroke.x2,stroke.y2,stroke.color,stroke.size,stroke.fillColor,stroke.dashed);
+  }else if(stroke.tool==='text'){
+    const fs=Math.max(12,stroke.size*5);ctx.setLineDash([]);ctx.font=`bold ${fs}px sans-serif`;
+    ctx.fillStyle=stroke.color;ctx.globalCompositeOperation='source-over';ctx.fillText(stroke.text||'',stroke.x1,stroke.y1);
+  }
   ctx.restore();
 }
 function drawEdArrow(ctx,x1,y1,x2,y2,color,size){
   const headLen=Math.max(size*5,14),angle=Math.atan2(y2-y1,x2-x1);
-  ctx.save();ctx.globalCompositeOperation='source-over';ctx.strokeStyle=color;ctx.fillStyle=color;ctx.lineWidth=size;ctx.lineCap='round';
+  ctx.save();ctx.globalCompositeOperation='source-over';ctx.strokeStyle=color;ctx.fillStyle=color;ctx.lineWidth=size;ctx.lineCap='round';ctx.setLineDash([]);
   ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();
   ctx.beginPath();ctx.moveTo(x2,y2);ctx.lineTo(x2-headLen*Math.cos(angle-Math.PI/6),y2-headLen*Math.sin(angle-Math.PI/6));ctx.lineTo(x2-headLen*Math.cos(angle+Math.PI/6),y2-headLen*Math.sin(angle+Math.PI/6));ctx.closePath();ctx.fill();ctx.restore();
+}
+function drawEdCloud(ctx,x1,y1,x2,y2,color,size,fillColor,dashed){
+  const lx=Math.min(x1,x2),rx=Math.max(x1,x2),ty=Math.min(y1,y2),by=Math.max(y1,y2);
+  const bump=Math.max(8,Math.min(22,size*4));
+  ctx.save();ctx.strokeStyle=color;ctx.lineWidth=size;ctx.lineCap='round';ctx.lineJoin='round';
+  ctx.beginPath();
+  function bumpEdge(ax,ay,bx,by2){
+    const len=Math.hypot(bx-ax,by2-ay);if(!len)return;
+    const n=Math.max(1,Math.round(len/(bump*2)));const dx=(bx-ax)/len,dy=(by2-ay)/len;
+    for(let j=0;j<n;j++){
+      const t0=j/n,t1=(j+1)/n;
+      const px0=ax+dx*len*t0,py0=ay+dy*len*t0,px1=ax+dx*len*t1,py1=ay+dy*len*t1;
+      const mx=(px0+px1)/2,my=(py0+py1)/2,r=Math.hypot(px1-px0,py1-py0)/2;
+      ctx.arc(mx,my,r,Math.atan2(py0-my,px0-mx),Math.atan2(py1-my,px1-mx),false);
+    }
+  }
+  ctx.moveTo(lx,ty);bumpEdge(lx,ty,rx,ty);bumpEdge(rx,ty,rx,by);bumpEdge(rx,by,lx,by);bumpEdge(lx,by,lx,ty);
+  ctx.closePath();
+  if(fillColor){ctx.setLineDash([]);ctx.fillStyle=hexAlpha(fillColor,.35);ctx.fill();}
+  if(dashed)ctx.setLineDash([size*4,size*2]);else ctx.setLineDash([]);
+  ctx.stroke();ctx.restore();
+}
+function drawPolylinePreview(ctx,cursorPos){
+  if(!polylinePoints.length)return;
+  ctx.save();ctx.strokeStyle=mkColor;ctx.lineWidth=mkSize;ctx.lineCap='round';ctx.lineJoin='round';
+  if(mkDashed)ctx.setLineDash([mkSize*4,mkSize*2]);else ctx.setLineDash([]);
+  ctx.globalAlpha=0.65;ctx.globalCompositeOperation='source-over';
+  ctx.beginPath();ctx.moveTo(polylinePoints[0].x,polylinePoints[0].y);
+  for(let i=1;i<polylinePoints.length;i++)ctx.lineTo(polylinePoints[i].x,polylinePoints[i].y);
+  if(cursorPos)ctx.lineTo(cursorPos.x,cursorPos.y);
+  ctx.stroke();ctx.restore();
+}
+function finalizePolyline(pn,dc){
+  if(!dc||!polylinePoints||polylinePoints.length<2)return;
+  const stroke={tool:'polyline',color:mkColor,size:mkSize,dashed:mkDashed,points:[...polylinePoints]};
+  polylinePoints=[];polylinePageNum=null;polylineDC=null;
+  if(!drawData[pn])drawData[pn]=[];if(!undoStack[pn])undoStack[pn]=[];
+  drawData[pn].push(stroke);undoStack[pn].push(stroke);
+  redrawPage(pn,dc);scheduleSave();
+}
+function isPointInShape(s,pos){
+  if(s.tool==='rect'||s.tool==='cloud'){
+    const lx=Math.min(s.x1,s.x2),rx=Math.max(s.x1,s.x2),ty=Math.min(s.y1,s.y2),by=Math.max(s.y1,s.y2);
+    return pos.x>=lx&&pos.x<=rx&&pos.y>=ty&&pos.y<=by;
+  }
+  if(s.tool==='circle'){
+    const cx=(s.x1+s.x2)/2,cy=(s.y1+s.y2)/2,rx=Math.abs(s.x2-s.x1)/2,ry=Math.abs(s.y2-s.y1)/2;
+    if(!rx||!ry)return false;
+    return Math.pow((pos.x-cx)/rx,2)+Math.pow((pos.y-cy)/ry,2)<=1;
+  }
+  return false;
+}
+function showTextInput(dc,pageNum,pos){
+  const existing=document.getElementById('mk-text-overlay');if(existing)existing.remove();
+  const wrap=dc.parentElement;
+  const rect=dc.getBoundingClientRect();
+  const cssX=pos.x*(rect.width/dc.width),cssY=pos.y*(rect.height/dc.height);
+  const overlay=document.createElement('div');overlay.id='mk-text-overlay';
+  overlay.style.cssText=`position:absolute;left:${cssX}px;top:${cssY}px;z-index:50;`;
+  const inp=document.createElement('input');
+  inp.style.cssText=`font-size:${Math.max(12,mkSize*4)}px;color:${mkColor};background:rgba(255,255,255,.88);border:1.5px dashed #5c2d91;border-radius:4px;padding:2px 6px;outline:none;min-width:90px;font-family:sans-serif;font-weight:bold;`;
+  inp.placeholder='Type text…';overlay.appendChild(inp);wrap.appendChild(overlay);inp.focus();
+  function commit(){
+    const txt=inp.value.trim();overlay.remove();
+    if(!txt)return;
+    const stroke={tool:'text',color:mkColor,size:mkSize,text:txt,x1:pos.x,y1:pos.y};
+    if(!drawData[pageNum])drawData[pageNum]=[];if(!undoStack[pageNum])undoStack[pageNum]=[];
+    drawData[pageNum].push(stroke);undoStack[pageNum].push(stroke);
+    redrawPage(pageNum,dc);scheduleSave();
+  }
+  inp.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();commit();}if(e.key==='Escape'){overlay.remove();}});
+  inp.addEventListener('blur',()=>setTimeout(commit,120));
 }
 function redrawPage(pageNum,dc){const ctx=dc.getContext('2d');ctx.clearRect(0,0,dc.width,dc.height);for(const s of(drawData[pageNum]||[]))drawEdStroke(ctx,s);}
 function undoLastStroke(){const dc=document.querySelector(`.draw-canvas[data-page="${curPage}"]`);if(!dc)return;const stack=undoStack[curPage];if(!stack||!stack.length){showToast('Nothing to undo');return;}const last=stack.pop();drawData[curPage]=drawData[curPage].filter(s=>s!==last);redrawPage(curPage,dc);}
@@ -955,7 +1091,14 @@ document.addEventListener('DOMContentLoaded',()=>{
   document.getElementById('mk-hi').addEventListener('click',()=>setEdTool('hi'));
   document.getElementById('mk-eraser').addEventListener('click',()=>setEdTool('eraser'));
   document.getElementById('mk-arrow').addEventListener('click',()=>setEdTool('arrow'));
+  document.getElementById('mk-line').addEventListener('click',()=>setEdTool('line'));
+  document.getElementById('mk-polyline').addEventListener('click',()=>setEdTool('polyline'));
   document.getElementById('mk-rect').addEventListener('click',()=>setEdTool('rect'));
+  document.getElementById('mk-circle').addEventListener('click',()=>setEdTool('circle'));
+  document.getElementById('mk-cloud').addEventListener('click',()=>setEdTool('cloud'));
+  document.getElementById('mk-text').addEventListener('click',()=>setEdTool('text'));
+  document.getElementById('mk-fill').addEventListener('click',()=>setEdTool('fill'));
+  document.getElementById('mk-dash').addEventListener('click',()=>{mkDashed=!mkDashed;document.getElementById('mk-dash').classList.toggle('active',mkDashed);});
   document.getElementById('mk-color-pick').addEventListener('input',e=>{mkColor=e.target.value;});
   document.getElementById('mk-size').addEventListener('input',e=>{mkSize=parseInt(e.target.value);});
   document.getElementById('mk-undo').addEventListener('click',undoLastStroke);
