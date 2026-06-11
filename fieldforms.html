@@ -931,6 +931,7 @@ function bindDrawEvents(dc,pageNum){
     if(SHAPE_TOOLS.has(mkTool))redrawPage(pageNum,dc);
     const ctx=dc.getContext('2d');drawEdStroke(ctx,currentStroke,false);
     if(!drawData[pageNum])drawData[pageNum]=[];if(!undoStack[pageNum])undoStack[pageNum]=[];
+    currentStroke._cw=dc.width;currentStroke._ch=dc.height;
     drawData[pageNum].push(currentStroke);undoStack[pageNum].push(currentStroke);currentStroke=null;scheduleSave();
   }
   function onClick(e){
@@ -1036,6 +1037,7 @@ function finalizePolyline(pn,dc){
   const stroke={tool:'polyline',color:mkColor,size:mkSize,dashed:mkDashed,points:[...polylinePoints]};
   polylinePoints=[];polylinePageNum=null;polylineDC=null;
   if(!drawData[pn])drawData[pn]=[];if(!undoStack[pn])undoStack[pn]=[];
+  stroke._cw=dc.width;stroke._ch=dc.height;
   drawData[pn].push(stroke);undoStack[pn].push(stroke);
   redrawPage(pn,dc);scheduleSave();
 }
@@ -1064,7 +1066,7 @@ function showTextInput(dc,pageNum,pos){
   function commit(){
     const txt=inp.value.trim();overlay.remove();
     if(!txt)return;
-    const stroke={tool:'text',color:mkColor,size:mkSize,text:txt,x1:pos.x,y1:pos.y};
+    const stroke={tool:'text',color:mkColor,size:mkSize,text:txt,x1:pos.x,y1:pos.y,_cw:dc.width,_ch:dc.height};
     if(!drawData[pageNum])drawData[pageNum]=[];if(!undoStack[pageNum])undoStack[pageNum]=[];
     drawData[pageNum].push(stroke);undoStack[pageNum].push(stroke);
     redrawPage(pageNum,dc);scheduleSave();
@@ -1072,7 +1074,13 @@ function showTextInput(dc,pageNum,pos){
   inp.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();commit();}if(e.key==='Escape'){overlay.remove();}});
   inp.addEventListener('blur',()=>setTimeout(commit,120));
 }
-function redrawPage(pageNum,dc){const ctx=dc.getContext('2d');ctx.clearRect(0,0,dc.width,dc.height);for(const s of(drawData[pageNum]||[]))drawEdStroke(ctx,s);}
+function redrawPage(pageNum,dc){
+  const ctx=dc.getContext('2d');ctx.clearRect(0,0,dc.width,dc.height);
+  for(const s of(drawData[pageNum]||[])){
+    if(s._cw&&s._cw!==dc.width){const scale=dc.width/s._cw;ctx.save();ctx.scale(scale,scale);drawEdStroke(ctx,s);ctx.restore();}
+    else{drawEdStroke(ctx,s);}
+  }
+}
 function undoLastStroke(){const dc=document.querySelector(`.draw-canvas[data-page="${curPage}"]`);if(!dc)return;const stack=undoStack[curPage];if(!stack||!stack.length){showToast('Nothing to undo');return;}const last=stack.pop();drawData[curPage]=drawData[curPage].filter(s=>s!==last);redrawPage(curPage,dc);}
 function clearCurrentPage(){if(!confirm('Clear all markup on this page?'))return;const dc=document.querySelector(`.draw-canvas[data-page="${curPage}"]`);if(!dc)return;dc.getContext('2d').clearRect(0,0,dc.width,dc.height);drawData[curPage]=[];undoStack[curPage]=[];}
 function hexAlpha(hex,a){const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);return`rgba(${r},${g},${b},${a})`;}
