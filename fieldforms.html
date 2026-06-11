@@ -1616,7 +1616,7 @@ async function getPdfBytes(tplId){
   let tpl=(APP.templates||[]).find(t=>t.id===tplId);
   if(!tpl){
     // Templates may not be loaded yet (e.g. restore triggered before loadTemplates completes)
-    try{const{data}=await SB.from('form_templates').select('*').eq('id',tplId).single();if(data)tpl=data;}catch(e){}
+    try{const{data}=await SB.from('form_templates').select('*').eq('id',tplId).single();if(data)tpl=fromRow('form_templates',data);}catch(e){}
   }
   if(tpl&&tpl.storagePath){
     try{
