@@ -1364,7 +1364,9 @@ async function exportSend(){
   const fname=document.getElementById('fnprev').textContent;
   const bytes=await buildExportPDF();
   downloadPDF(bytes,fname);
-  const snap={fieldVals,drawData,tplId:APP.currentTemplate?.id,tplName:APP.currentTemplate?.name,inlinePhotos:inlinePhotos.map(ip=>({...ip})),photoPages:photoPages2.map(pp=>({...pp}))};
+  // Strip photoPages from the saved payload — they're embedded in the PDF already.
+  // Keeping them would bloat the DB payload column with megabytes of base64.
+  const snap={fieldVals,drawData,tplId:APP.currentTemplate?.id,tplName:APP.currentTemplate?.name,inlinePhotos:inlinePhotos.map(ip=>({...ip})),photoPages:[]};
   if(APP.hubDocId&&window.parent!==window){
     const reader=new FileReader();
     reader.onloadend=()=>{window.parent.postMessage({type:'SAVE_PDF',docId:APP.hubDocId,pdfDataUri:reader.result,formPayload:snap,fileName:fname},'*');};
@@ -1389,7 +1391,8 @@ async function exportOnly(){
   const fname=document.getElementById('fnprev').textContent;
   const bytes=await buildExportPDF();
   downloadPDF(bytes,fname);
-  const snap={fieldVals,drawData,tplId:APP.currentTemplate?.id,tplName:APP.currentTemplate?.name,inlinePhotos:inlinePhotos.map(ip=>({...ip})),photoPages:photoPages2.map(pp=>({...pp}))};
+  // Strip photoPages from the saved payload — they're embedded in the PDF already.
+  const snap={fieldVals,drawData,tplId:APP.currentTemplate?.id,tplName:APP.currentTemplate?.name,inlinePhotos:inlinePhotos.map(ip=>({...ip})),photoPages:[]};
   if(APP.hubDocId&&window.parent!==window){
     const reader=new FileReader();
     reader.onloadend=()=>{window.parent.postMessage({type:'SAVE_PDF',docId:APP.hubDocId,pdfDataUri:reader.result,formPayload:snap,fileName:fname},'*');};
