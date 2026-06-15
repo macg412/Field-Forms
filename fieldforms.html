@@ -578,7 +578,8 @@ const PDF_DATA = {
 };
 </script>
 <script>
-pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+// workerSrc is set to a same-origin blob URL in the init IIFE below to prevent canvas taint.
+const _PDFJS_WORKER_CDN='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 const {PDFDocument,rgb,StandardFonts}=PDFLib;
 
 // ═══ TEMPLATES (live list from Supabase form_templates) ═══
@@ -1659,6 +1660,15 @@ function showToast(msg,cls=''){const t=document.getElementById('toast');t.textCo
 
 // ═══ INIT ═══
 (async()=>{
+  // Create a same-origin blob URL for the pdf.js worker so canvas rendering
+  // is not tainted by cross-origin worker restrictions (Chromium bug).
+  try{
+    const r=await fetch(_PDFJS_WORKER_CDN);
+    const blob=await r.blob();
+    pdfjsLib.GlobalWorkerOptions.workerSrc=URL.createObjectURL(blob);
+  }catch(e){
+    pdfjsLib.GlobalWorkerOptions.workerSrc=_PDFJS_WORKER_CDN;
+  }
   SB=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
   loadTemplates();
   // Standalone admin button
