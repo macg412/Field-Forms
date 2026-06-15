@@ -1362,7 +1362,8 @@ const FF_EMAIL_MAP={Fault:'EnergyValleyFaults@downergroup.com',Defect:'EnergyVal
 async function exportSend(){
   closeM('mfn');
   const fname=document.getElementById('fnprev').textContent;
-  const bytes=await buildExportPDF();
+  let bytes;
+  try{bytes=await buildExportPDF();}catch(err){showToast('PDF error: '+err.message,'terr');console.error(err);return;}
   downloadPDF(bytes,fname);
   // Strip photoPages from the saved payload — they're embedded in the PDF already.
   // Keeping them would bloat the DB payload column with megabytes of base64.
@@ -1377,7 +1378,8 @@ async function exportSend(){
   const sub=encodeURIComponent(fname.replace('.pdf',''));
   const body=encodeURIComponent(`Attached: ${fname}\nTechnician: ${APP.ctx?.userName||''}\nDate: ${new Date().toLocaleDateString('en-NZ')}\n\nFieldForms — Downer NZ`);
   setTimeout(()=>{
-    window.location.href=`mailto:${to}?subject=${sub}&body=${body}`;
+    // Use window.top so mailto triggers the system email client even when running inside an iframe.
+    (window.top||window).location.href=`mailto:${to}?subject=${sub}&body=${body}`;
     alert(`✅ PDF saved as:\n"${fname}"\n\nEmail opening${to?` to:\n${to}`:':\n(Please add recipient for this job type)'}\n\nPlease attach the PDF before sending.`);
     if(window.parent!==window){
       window.parent.postMessage({type:'APP_DONE'},'*');
@@ -1389,7 +1391,8 @@ async function exportSend(){
 async function exportOnly(){
   closeM('mfn');
   const fname=document.getElementById('fnprev').textContent;
-  const bytes=await buildExportPDF();
+  let bytes;
+  try{bytes=await buildExportPDF();}catch(err){showToast('PDF error: '+err.message,'terr');console.error(err);return;}
   downloadPDF(bytes,fname);
   // Strip photoPages from the saved payload — they're embedded in the PDF already.
   const snap={fieldVals,drawData,tplId:APP.currentTemplate?.id,tplName:APP.currentTemplate?.name,inlinePhotos:inlinePhotos.map(ip=>({...ip})),photoPages:[]};
