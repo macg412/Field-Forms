@@ -789,7 +789,6 @@ async function renderPages(){
     const logVp=page.getViewport({scale:edZoom});          // CSS (logical) dimensions
     const hiVp =page.getViewport({scale:edZoom*dpr});      // physical pixel dimensions
     const cssW=logVp.width, cssH=logVp.height;
-    const pageH=page.getViewport({scale:1}).height;
     const wrap=document.createElement('div');
     wrap.className='pw';wrap.dataset.page=p;
     wrap.style.width=cssW+'px';wrap.style.height=cssH+'px';
@@ -803,7 +802,7 @@ async function renderPages(){
     const anns=await page.getAnnotations();
     for(const ann of anns){
       if(ann.subtype!=='Widget')continue;
-      const ov=makeFieldOverlay(ann,logVp,pageH);
+      const ov=makeFieldOverlay(ann,logVp);
       if(ov)wrap.appendChild(ov);
     }
     // Draw canvas — also at physical resolution for crisp markup strokes
@@ -833,9 +832,10 @@ async function renderPages(){
 }
 
 // ── Field overlays (exact same logic as pc-asbuilt) ──
-function makeFieldOverlay(ann,vp,pageH){
-  const[x1,y1,x2,y2]=ann.rect;const s=vp.scale;
-  const left=x1*s,top=(pageH-y2)*s,w=(x2-x1)*s,h=(y2-y1)*s;
+function makeFieldOverlay(ann,vp){
+  const r=vp.convertToViewportRectangle(ann.rect);
+  const left=Math.min(r[0],r[2]),top=Math.min(r[1],r[3]);
+  const w=Math.abs(r[2]-r[0]),h=Math.abs(r[3]-r[1]);
   if(w<2||h<2)return null;
   const wrap=document.createElement('div');wrap.className='fov';
   wrap.style.cssText=`left:${left}px;top:${top}px;width:${w}px;height:${h}px;`;
@@ -1433,13 +1433,13 @@ async function buildExportPDF(){
       await page.render({canvasContext:ctx2d,viewport:vp}).promise;
       // Draw field values onto canvas
       const anns=await page.getAnnotations();
-      const pageH=nativeVp.height;
       for(const ann of anns){
         if(ann.subtype!=='Widget')continue;
         const fid=ann.fieldName||ann.id;
         const v=fieldVals[fid];
-        const[x1,y1,x2,y2]=ann.rect;
-        const left=x1*scale,top=(pageH-y2)*scale,w=(x2-x1)*scale,h=(y2-y1)*scale;
+        const r=vp.convertToViewportRectangle(ann.rect);
+        const left=Math.min(r[0],r[2]),top=Math.min(r[1],r[3]);
+        const w=Math.abs(r[2]-r[0]),h=Math.abs(r[3]-r[1]);
         if(w<2||h<2)continue;
         if(ann.fieldType==='Tx'&&v!==undefined&&v!==null&&v!==''){
           ctx2d.save();
