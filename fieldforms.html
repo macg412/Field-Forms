@@ -286,8 +286,13 @@ input.mkslider{width:80px;height:4px;accent-color:#5c2d91;cursor:pointer;flex-sh
 .pcard-cap{width:100%;border:none;border-bottom:1px solid #d0d4dc;background:transparent;font-family:var(--fn);font-size:11px;color:#1a1a2c;outline:none;padding:3px 1px;}
 .pcard-cap:focus{border-bottom-color:#5c2d91;}
 .pcard-cap::placeholder{color:#c0c4ce;}
-.pcard-del{background:none;border:none;cursor:pointer;font-family:var(--fn);font-size:11px;color:#bbb;text-align:right;transition:.12s;padding:2px 0;}
-.pcard-del:hover{color:#dc2626;}
+/* Corner buttons on the thumbnail: blue + (empty only, top-left), red ✕ (always, top-right) */
+.pcard-badd,.pcard-del{position:absolute;top:4px;width:22px;height:22px;border:none;border-radius:5px;display:flex;align-items:center;justify-content:center;line-height:1;color:#fff;cursor:pointer;z-index:3;padding:0;transition:.12s;touch-action:manipulation;}
+.pcard-badd{left:4px;background:#3b82f6;font-size:15px;font-weight:700;}
+.pcard-badd:hover{background:#2563eb;}
+.pcard-del{right:4px;background:#dc2626;font-size:12px;}
+.pcard-del:hover{background:#b91c1c;}
+.pcard.has-photo .pcard-badd{display:none;}
 .pcard-add{flex-shrink:0;width:80px;min-height:128px;background:rgba(92,45,145,.05);border:1.5px dashed rgba(92,45,145,.28);border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;cursor:pointer;transition:.15s;color:#5c2d91;font-size:11px;font-weight:600;text-align:center;padding:8px;touch-action:manipulation;}
 .pcard-add:hover{background:rgba(92,45,145,.12);border-color:#5c2d91;}
 .pcard-add span{font-size:24px;}
@@ -1305,13 +1310,29 @@ function clearPhotoTray(){document.getElementById('ptray-scroll').querySelectorA
 function addPhotoCard(obj){
   const id=obj.id;
   const card=document.createElement('div');card.className='pcard';card.dataset.pid=id;
-  card.innerHTML=`<div class="pcard-img">${obj.dataUrl?`<img src="${obj.dataUrl}" alt="">`:'🖼'}</div><div class="pcard-body"><input class="pcard-cap" type="text" placeholder="Caption…" maxlength="120" value="${obj.title||''}"><button class="pcard-del">✕ Remove</button></div>`;
+  card.innerHTML=`<div class="pcard-img"><button class="pcard-badd" title="Add photo">＋</button><button class="pcard-del" title="Remove">✕</button></div><div class="pcard-body"><input class="pcard-cap" type="text" placeholder="Caption…" maxlength="120" value="${obj.title||''}"></div>`;
   const imgDiv=card.querySelector('.pcard-img');
   const cap=card.querySelector('.pcard-cap');
-  // Make image tappable to pick file
-  imgDiv.addEventListener('click',()=>{const fi=document.createElement('input');fi.type='file';fi.accept='image/*';fi.onchange=function(){const f=this.files[0];if(!f)return;if(!obj.title){obj.title=fileBaseName(f.name);cap.value=obj.title;}const rd=new FileReader();rd.onload=ev=>{fixImgOrientation(ev.target.result,corrected=>{obj.dataUrl=corrected;obj.mimeType='image/jpeg';imgDiv.innerHTML=`<img src="${corrected}" alt="">`;scheduleSave();});};rd.readAsDataURL(f);};fi.click();});
+  const pickPhoto=()=>{const fi=document.createElement('input');fi.type='file';fi.accept='image/*';fi.onchange=function(){const f=this.files[0];if(!f)return;if(!obj.title){obj.title=fileBaseName(f.name);cap.value=obj.title;}const rd=new FileReader();rd.onload=ev=>{fixImgOrientation(ev.target.result,corrected=>{obj.dataUrl=corrected;obj.mimeType='image/jpeg';setCardImg(corrected);scheduleSave();});};rd.readAsDataURL(f);};fi.click();};
+  // Swap thumbnail contents without clobbering the corner buttons
+  function setCardImg(dataUrl){
+    const old=imgDiv.querySelector('img');if(old)old.remove();
+    const ph=imgDiv.querySelector('.pcard-ph');if(ph)ph.remove();
+    if(dataUrl){const im=document.createElement('img');im.src=dataUrl;im.alt='';imgDiv.insertBefore(im,imgDiv.firstChild);card.classList.add('has-photo');}
+    else{const s=document.createElement('span');s.className='pcard-ph';s.textContent='🖼';imgDiv.insertBefore(s,imgDiv.firstChild);card.classList.remove('has-photo');}
+  }
+  setCardImg(obj.dataUrl||null);
+  // Tap the thumbnail (or the blue +) to pick a file
+  imgDiv.addEventListener('click',pickPhoto);
+  card.querySelector('.pcard-badd').addEventListener('click',e=>{e.stopPropagation();pickPhoto();});
   cap.addEventListener('input',()=>{obj.title=cap.value;scheduleSave();});
-  card.querySelector('.pcard-del').addEventListener('click',()=>{card.remove();photoPages2=photoPages2.filter(p=>p.id!==id);scheduleSave();});
+  // Red ✕: clears the photo if there is one, otherwise deletes the whole page
+  card.querySelector('.pcard-del').addEventListener('click',e=>{
+    e.stopPropagation();
+    if(obj.dataUrl){obj.dataUrl=null;obj.mimeType=null;setCardImg(null);}
+    else{card.remove();photoPages2=photoPages2.filter(p=>p.id!==id);}
+    scheduleSave();
+  });
   document.getElementById('ptray-scroll').insertBefore(card,document.getElementById('pcard-add-btn'));
 }
 
