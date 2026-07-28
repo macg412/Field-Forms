@@ -303,14 +303,22 @@ input.mkslider{width:80px;height:4px;accent-color:#5c2d91;cursor:pointer;flex-sh
 .insert-photo-btn .ipic{font-size:20px;}
 
 /* ── SITE GALLERY ── */
-.sgal-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(82px,1fr));gap:8px;max-height:52vh;overflow-y:auto;padding:2px 0 4px;}
-.sgal-thumb{position:relative;aspect-ratio:1;border-radius:8px;overflow:hidden;cursor:pointer;border:2px solid transparent;transition:.12s;}
-.sgal-thumb:hover{border-color:#3b82f6;}
-.sgal-thumb img{width:100%;height:100%;object-fit:cover;display:block;pointer-events:none;}
-.sgal-pp-btn{position:absolute;bottom:3px;right:3px;background:rgba(0,0,0,.58);color:#fff;border:none;border-radius:4px;font-size:9px;padding:3px 5px;cursor:pointer;line-height:1.4;touch-action:manipulation;}
-.sgal-pp-btn:active{background:rgba(59,130,246,.9);}
-.sgal-prev-btn{position:absolute;bottom:3px;left:3px;background:rgba(0,0,0,.58);color:#fff;border:none;border-radius:4px;font-size:11px;padding:2px 5px;cursor:pointer;line-height:1.4;touch-action:manipulation;}
-.sgal-prev-btn:active{background:rgba(59,130,246,.9);}
+/* 132px keeps 2 columns on a narrow phone modal and 3 at the 520px max-width */
+.sgal-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(132px,1fr));gap:8px;max-height:62vh;overflow-y:auto;padding:2px 0 4px;}
+/* block, not flex — a flex parent blockifies -webkit-box and kills the caption line-clamp */
+.sgal-thumb{display:block;background:#f5f6f9;border:1px solid #d0d4dc;border-radius:8px;overflow:hidden;padding-bottom:2px;}
+.sgal-img{aspect-ratio:1;overflow:hidden;cursor:pointer;background:#e8eaee;border-bottom:1px solid #d0d4dc;}
+.sgal-img img{width:100%;height:100%;object-fit:cover;display:block;pointer-events:none;}
+.sgal-img:hover{opacity:.88;}
+/* Fixed 2-line box so buttons line up across a row regardless of caption length.
+   Spacing must be margin, not padding — overflow clips at the padding box, so
+   padding-bottom would leave a gap for a clipped 3rd line to show through. */
+.sgal-cap{font-size:11px;font-weight:600;color:#1a1a2c;line-height:1.32;height:2.64em;margin:6px 7px 5px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;word-break:break-word;}
+.sgal-cap.none{color:var(--tx3);font-weight:500;font-style:italic;}
+.sgal-btn{display:block;width:calc(100% - 14px);margin:0 7px 5px;min-height:30px;border:1px solid #d0d4dc;border-radius:6px;background:#fff;color:#3d3d4e;font-family:var(--fn);font-size:11px;font-weight:600;cursor:pointer;padding:5px 4px;transition:.12s;touch-action:manipulation;}
+.sgal-btn:hover{background:#eef0f4;}
+.sgal-btn.blue{background:#3b82f6;border-color:#3b82f6;color:#fff;}
+.sgal-btn.blue:hover{background:#2563eb;border-color:#2563eb;}
 .sgal-empty{text-align:center;padding:28px 16px;color:var(--tx3);font-size:13px;}
 .sgal-lightbox{display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.88);align-items:center;justify-content:center;flex-direction:column;}
 .sgal-lightbox.open{display:flex;}
@@ -533,8 +541,7 @@ input.mkslider{width:80px;height:4px;accent-color:#5c2d91;cursor:pointer;flex-sh
 <div class="mo" id="msgal">
   <div class="md">
     <div class="mdh"></div>
-    <div class="mdt">🗂 Site Photos</div>
-    <div style="font-size:11px;color:var(--tx3);margin-bottom:10px;">Tap a photo to place it on the PDF. Use 🖼 to add to Photo Pages, 🔍 to preview.</div>
+    <div class="mdt" style="margin-bottom:10px;">🗂 Site Photos</div>
     <div id="sgal-grid" class="sgal-grid"></div>
     <button class="btn bg bf" style="margin-top:12px;" onclick="closeM('msgal')">Close</button>
   </div>
@@ -1213,15 +1220,30 @@ async function openSiteGallery(){
     grid.innerHTML=`<div class="sgal-empty">${error?'Could not load photos.':'No photos in this site\'s gallery yet.'}</div>`;
     return;
   }
-  grid.innerHTML=photos.map((p,i)=>`
-    <div class="sgal-thumb" data-idx="${i}" data-cap="${(p.caption||'').replace(/"/g,'&quot;')}">
-      <img src="${p.public_url}" loading="lazy">
-      <button class="sgal-prev-btn" title="Preview photo" onclick="event.stopPropagation();openSitePhotoPreview('${p.public_url}')">🔍</button>
-      <button class="sgal-pp-btn" title="Add to Photo Pages" onclick="event.stopPropagation();addGalleryPhotoToPages('${p.public_url}',this.closest('.sgal-thumb').dataset.cap)">🖼</button>
-    </div>`).join('');
-  grid.querySelectorAll('.sgal-thumb').forEach((thumb,i)=>{
-    thumb.addEventListener('click',()=>{closeM('msgal');loadGalleryImage(photos[i].public_url,enterPlacementMode);});
-  });
+  grid.innerHTML='';
+  photos.forEach((p,i)=>grid.appendChild(buildGalleryCard(p,i)));
+}
+
+// One gallery card: thumbnail, caption, then a labelled button per action
+function buildGalleryCard(p,i){
+  const url=p.public_url;
+  const caption=(p.caption||'').trim();
+  const card=document.createElement('div');card.className='sgal-thumb';
+  const imgWrap=document.createElement('div');imgWrap.className='sgal-img';
+  const img=document.createElement('img');img.src=url;img.loading='lazy';img.alt=caption;
+  imgWrap.appendChild(img);
+  const cap=document.createElement('div');
+  cap.className='sgal-cap'+(caption?'':' none');
+  cap.textContent=caption||`Photo ${i+1}`;
+  const bAdd=document.createElement('button');bAdd.className='sgal-btn blue';bAdd.textContent='＋ Photo Page';
+  const bIns=document.createElement('button');bIns.className='sgal-btn';bIns.textContent='📷 Insert Photo';
+  const bPrev=document.createElement('button');bPrev.className='sgal-btn';bPrev.textContent='🔍 Preview';
+  bAdd.addEventListener('click',()=>addGalleryPhotoToPages(url,caption));
+  bIns.addEventListener('click',()=>{closeM('msgal');loadGalleryImage(url,enterPlacementMode);});
+  bPrev.addEventListener('click',()=>openSitePhotoPreview(url));
+  imgWrap.addEventListener('click',()=>openSitePhotoPreview(url));
+  card.append(imgWrap,cap,bAdd,bIns,bPrev);
+  return card;
 }
 
 async function addGalleryPhotoToPages(url,caption=''){
