@@ -279,20 +279,32 @@ input.mkslider{width:80px;height:4px;accent-color:#5c2d91;cursor:pointer;flex-sh
 .ptray-scroll{display:flex;gap:10px;padding:10px 12px;overflow-x:auto;align-items:flex-start;min-height:148px;-webkit-overflow-scrolling:touch;}
 .ptray-scroll::-webkit-scrollbar{height:3px;}
 .ptray-scroll::-webkit-scrollbar-thumb{background:#ccc;border-radius:4px;}
-.pcard{flex-shrink:0;width:140px;background:#f5f6f9;border:1px solid #d0d4dc;border-radius:8px;overflow:hidden;}
+.pcard{flex-shrink:0;width:140px;background:#f5f6f9;border:1px solid #d0d4dc;border-radius:8px;overflow:hidden;user-select:none;-webkit-user-select:none;transition:transform .12s,box-shadow .12s,opacity .12s;}
 .pcard-img{width:100%;height:82px;background:#e8eaee;display:flex;align-items:center;justify-content:center;font-size:24px;color:#b0b5be;position:relative;cursor:pointer;overflow:hidden;}
-.pcard-img img{width:100%;height:100%;object-fit:cover;display:block;}
+/* -webkit-user-drag off so the native image drag doesn't fight reordering */
+.pcard-img img{width:100%;height:100%;object-fit:cover;display:block;-webkit-user-drag:none;user-drag:none;-webkit-touch-callout:none;}
 .pcard-body{padding:6px 7px;display:flex;flex-direction:column;gap:5px;}
 .pcard-cap{width:100%;border:none;border-bottom:1px solid #d0d4dc;background:transparent;font-family:var(--fn);font-size:11px;color:#1a1a2c;outline:none;padding:3px 1px;}
 .pcard-cap:focus{border-bottom-color:#5c2d91;}
 .pcard-cap::placeholder{color:#c0c4ce;}
-/* Corner buttons on the thumbnail: blue + (empty only, top-left), red ✕ (always, top-right) */
-.pcard-badd,.pcard-del{position:absolute;top:4px;width:22px;height:22px;border:none;border-radius:5px;display:flex;align-items:center;justify-content:center;line-height:1;color:#fff;cursor:pointer;z-index:3;padding:0;transition:.12s;touch-action:manipulation;}
-.pcard-badd{left:4px;background:#3b82f6;font-size:15px;font-weight:700;}
-.pcard-badd:hover{background:#2563eb;}
+/* Corner buttons. Top-left is the blue + when the card is empty and the download
+   button once a photo is set — the two states are mutually exclusive. Red ✕ is
+   always top-right. */
+.pcard-badd,.pcard-del,.pcard-dl{position:absolute;top:4px;width:22px;height:22px;border:none;border-radius:5px;display:flex;align-items:center;justify-content:center;line-height:1;color:#fff;cursor:pointer;z-index:3;padding:0;transition:.12s;touch-action:manipulation;}
+.pcard-badd,.pcard-dl{left:4px;background:#3b82f6;}
+.pcard-badd{font-size:15px;font-weight:700;}
+.pcard-dl{font-size:15px;font-weight:700;}
+.pcard-badd:hover,.pcard-dl:hover{background:#2563eb;}
 .pcard-del{right:4px;background:#dc2626;font-size:12px;}
 .pcard-del:hover{background:#b91c1c;}
+.pcard-dl{display:none;}
 .pcard.has-photo .pcard-badd{display:none;}
+.pcard.has-photo .pcard-dl{display:flex;}
+/* ── PHOTO TRAY DRAG-TO-REORDER ── */
+.pcard.dragging{opacity:.85;transform:scale(1.05);box-shadow:0 6px 18px rgba(0,0,0,.28);position:relative;z-index:6;cursor:grabbing;}
+.pcard.lifting{transform:scale(1.05);box-shadow:0 6px 18px rgba(0,0,0,.28);}
+.ptray-scroll.reordering{cursor:grabbing;}
+.ptray-scroll.reordering .pcard-cap{pointer-events:none;}
 .pcard-add{flex-shrink:0;width:80px;min-height:128px;background:rgba(92,45,145,.05);border:1.5px dashed rgba(92,45,145,.28);border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;cursor:pointer;transition:.15s;color:#5c2d91;font-size:11px;font-weight:600;text-align:center;padding:8px;touch-action:manipulation;}
 .pcard-add:hover{background:rgba(92,45,145,.12);border-color:#5c2d91;}
 .pcard-add span{font-size:24px;}
@@ -1332,7 +1344,7 @@ function clearPhotoTray(){document.getElementById('ptray-scroll').querySelectorA
 function addPhotoCard(obj){
   const id=obj.id;
   const card=document.createElement('div');card.className='pcard';card.dataset.pid=id;
-  card.innerHTML=`<div class="pcard-img"><button class="pcard-badd" title="Add photo">＋</button><button class="pcard-del" title="Remove">✕</button></div><div class="pcard-body"><input class="pcard-cap" type="text" placeholder="Caption…" maxlength="120" value="${obj.title||''}"></div>`;
+  card.innerHTML=`<div class="pcard-img"><button class="pcard-badd" title="Add photo">＋</button><button class="pcard-dl" title="Download photo">↓</button><button class="pcard-del" title="Remove">✕</button></div><div class="pcard-body"><input class="pcard-cap" type="text" placeholder="Caption…" maxlength="120" value="${obj.title||''}"></div>`;
   const imgDiv=card.querySelector('.pcard-img');
   const cap=card.querySelector('.pcard-cap');
   const pickPhoto=()=>{const fi=document.createElement('input');fi.type='file';fi.accept='image/*';fi.onchange=function(){const f=this.files[0];if(!f)return;if(!obj.title){obj.title=fileBaseName(f.name);cap.value=obj.title;}const rd=new FileReader();rd.onload=ev=>{fixImgOrientation(ev.target.result,corrected=>{obj.dataUrl=corrected;obj.mimeType='image/jpeg';setCardImg(corrected);scheduleSave();});};rd.readAsDataURL(f);};fi.click();};
@@ -1344,10 +1356,12 @@ function addPhotoCard(obj){
     else{const s=document.createElement('span');s.className='pcard-ph';s.textContent='🖼';imgDiv.insertBefore(s,imgDiv.firstChild);card.classList.remove('has-photo');}
   }
   setCardImg(obj.dataUrl||null);
-  // Tap the thumbnail (or the blue +) to pick a file
-  imgDiv.addEventListener('click',pickPhoto);
+  // Tap the thumbnail (or the blue +) to pick a file. Ignore the click that ends a drag.
+  imgDiv.addEventListener('click',()=>{if(Date.now()<_suppressCardClick)return;pickPhoto();});
   card.querySelector('.pcard-badd').addEventListener('click',e=>{e.stopPropagation();pickPhoto();});
+  card.querySelector('.pcard-dl').addEventListener('click',e=>{e.stopPropagation();downloadPhotoPage(obj);});
   cap.addEventListener('input',()=>{obj.title=cap.value;scheduleSave();});
+  enableCardReorder(card);
   // Red ✕: clears the photo if there is one, otherwise deletes the whole page
   card.querySelector('.pcard-del').addEventListener('click',e=>{
     e.stopPropagation();
@@ -1356,6 +1370,115 @@ function addPhotoCard(obj){
     scheduleSave();
   });
   document.getElementById('ptray-scroll').insertBefore(card,document.getElementById('pcard-add-btn'));
+}
+
+// Save a photo page's image to the device
+function downloadPhotoPage(obj){
+  if(!obj.dataUrl){showToast('No photo to download','twrn');return;}
+  const ext=(obj.mimeType==='image/png'||/^data:image\/png/.test(obj.dataUrl))?'png':'jpg';
+  const base=(obj.title||`photo-${obj.id}`).replace(/[\\/:*?"<>|]+/g,'-').trim().slice(0,60)||`photo-${obj.id}`;
+  const a=document.createElement('a');
+  a.href=obj.dataUrl;a.download=`${base}.${ext}`;
+  document.body.appendChild(a);a.click();a.remove();
+}
+
+// ── PHOTO TRAY DRAG-TO-REORDER ──
+// Mouse: drag once past a small threshold. Touch: press and hold, then drag.
+let _dragCard=null,_suppressCardClick=0,_holdTimer=null,_edgeScroll=null;
+const HOLD_MS=350, MOVE_TOL=10, DRAG_THRESHOLD=4;
+
+function enableCardReorder(card){
+  let startX=0,startY=0,armed=false;
+
+  // ---- mouse ----
+  card.addEventListener('mousedown',e=>{
+    if(e.button!==0||isNoDragTarget(e.target))return;
+    startX=e.clientX;startY=e.clientY;armed=true;
+    const onMove=ev=>{
+      if(armed&&Math.hypot(ev.clientX-startX,ev.clientY-startY)>DRAG_THRESHOLD){armed=false;beginDrag(card);}
+      if(_dragCard===card){ev.preventDefault();dragMoveTo(ev.clientX);}
+    };
+    const onUp=()=>{
+      armed=false;document.removeEventListener('mousemove',onMove);document.removeEventListener('mouseup',onUp);
+      if(_dragCard===card)endDrag();
+    };
+    document.addEventListener('mousemove',onMove);
+    document.addEventListener('mouseup',onUp);
+  });
+
+  // ---- touch: press-and-hold to lift, then drag ----
+  card.addEventListener('touchstart',e=>{
+    if(isNoDragTarget(e.target)||e.touches.length!==1)return;
+    const t=e.touches[0];startX=t.clientX;startY=t.clientY;
+    clearTimeout(_holdTimer);
+    card.classList.add('lifting');
+    _holdTimer=setTimeout(()=>{card.classList.remove('lifting');beginDrag(card);},HOLD_MS);
+  },{passive:true});
+
+  // Non-passive so we can preventDefault and stop the tray scrolling mid-drag
+  card.addEventListener('touchmove',e=>{
+    const t=e.touches[0];if(!t)return;
+    if(_dragCard===card){e.preventDefault();dragMoveTo(t.clientX);return;}
+    // Moved before the hold fired — treat as a scroll, not a drag
+    if(_holdTimer&&Math.hypot(t.clientX-startX,t.clientY-startY)>MOVE_TOL){
+      clearTimeout(_holdTimer);_holdTimer=null;card.classList.remove('lifting');
+    }
+  },{passive:false});
+
+  const touchEnd=()=>{
+    clearTimeout(_holdTimer);_holdTimer=null;card.classList.remove('lifting');
+    if(_dragCard===card)endDrag();
+  };
+  card.addEventListener('touchend',touchEnd);
+  card.addEventListener('touchcancel',touchEnd);
+}
+
+// Buttons and the caption field keep their own behaviour
+function isNoDragTarget(el){return !!(el.closest&&el.closest('.pcard-badd,.pcard-dl,.pcard-del,.pcard-cap'));}
+
+function beginDrag(card){
+  _dragCard=card;card.classList.add('dragging');
+  document.getElementById('ptray-scroll').classList.add('reordering');
+}
+
+// Reposition the dragged card among its siblings based on pointer x
+function dragMoveTo(clientX){
+  const scroll=document.getElementById('ptray-scroll');
+  const addBtn=document.getElementById('pcard-add-btn');
+  const others=[...scroll.querySelectorAll('.pcard:not(.dragging)')];
+  const after=others.find(c=>{const r=c.getBoundingClientRect();return clientX<r.left+r.width/2;});
+  if(after){if(after!==_dragCard.nextSibling)scroll.insertBefore(_dragCard,after);}
+  else if(_dragCard.nextSibling!==addBtn)scroll.insertBefore(_dragCard,addBtn);
+  autoScrollEdge(scroll,clientX);
+}
+
+// Keep scrolling while the finger sits near either end of the tray
+function autoScrollEdge(scroll,clientX){
+  const r=scroll.getBoundingClientRect(),zone=44;
+  let dir=0;
+  if(clientX<r.left+zone)dir=-1;else if(clientX>r.right-zone)dir=1;
+  if(!dir){clearInterval(_edgeScroll);_edgeScroll=null;return;}
+  if(_edgeScroll)return;
+  _edgeScroll=setInterval(()=>{if(!_dragCard){clearInterval(_edgeScroll);_edgeScroll=null;return;}scroll.scrollLeft+=dir*14;},16);
+}
+
+function endDrag(){
+  if(!_dragCard)return;
+  _dragCard.classList.remove('dragging');
+  document.getElementById('ptray-scroll').classList.remove('reordering');
+  _dragCard=null;
+  clearInterval(_edgeScroll);_edgeScroll=null;
+  _suppressCardClick=Date.now()+350;  // don't let the release open the file picker
+  commitPhotoOrder();
+}
+
+// Rebuild photoPages2 to match the on-screen card order (drives the PDF export order)
+function commitPhotoOrder(){
+  const ids=[...document.getElementById('ptray-scroll').querySelectorAll('.pcard')].map(c=>c.dataset.pid);
+  const byId=new Map(photoPages2.map(p=>[String(p.id),p]));
+  const reordered=ids.map(i=>byId.get(i)).filter(Boolean);
+  if(reordered.length===photoPages2.length)photoPages2=reordered;
+  scheduleSave();
 }
 
 // ── EXIF orientation fix (same as pc-asbuilt) ──
