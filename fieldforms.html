@@ -1482,29 +1482,77 @@ function commitPhotoOrder(){
 }
 
 // ── EXIF orientation fix (same as pc-asbuilt) ──
+/* This used to re-encode at the photo's full natural resolution at q0.92, which
+   is why a phone photo landed in the payload at multiple MB. Every one of those
+   bytes is base64 inside documents.payload, re-read on open and rewritten on save.
+   Clamping the long edge is the biggest reduction available here. Note these
+   images also become photo pages in the exported PDF, so 1600px is a real
+   quality decision: across an A4 page that is roughly 136 dpi -- fine for a
+   field record, and raise PHOTO_MAX_EDGE if the printed output needs more.
+   Measured 2.0x smaller base64 than the old full-res/q0.92 encode on a
+   1350x1800 source; much more than that on a camera-original photo, which this
+   path previously stored at full resolution.
+   Kept in step with jobcard.html's loadImg, which uses the same numbers. */
+const PHOTO_MAX_EDGE=1600;
+const PHOTO_QUALITY=0.75;
+
 function fixImgOrientation(dataUrl,callback){
   const img=document.createElement('img');img.style.cssText='position:fixed;left:-99999px;top:-99999px;visibility:hidden;image-orientation:from-image;';document.body.appendChild(img);
-  img.onload=()=>{const c=document.createElement('canvas');c.width=img.naturalWidth;c.height=img.naturalHeight;c.getContext('2d').drawImage(img,0,0,c.width,c.height);document.body.removeChild(img);callback(c.toDataURL('image/jpeg',0.92));};
+  img.onload=()=>{
+    let w=img.naturalWidth,h=img.naturalHeight;
+    if(w>PHOTO_MAX_EDGE||h>PHOTO_MAX_EDGE){const s=PHOTO_MAX_EDGE/Math.max(w,h);w=Math.round(w*s);h=Math.round(h*s);}
+    const c=document.createElement('canvas');c.width=w;c.height=h;
+    c.getContext('2d').drawImage(img,0,0,w,h);document.body.removeChild(img);
+    callback(c.toDataURL('image/jpeg',PHOTO_QUALITY));
+  };
   img.onerror=()=>{document.body.removeChild(img);callback(dataUrl);};
   img.src=dataUrl;
 }
 
 // ── AUTO SAVE ──
-function scheduleSave(){clearTimeout(APP._saveTimer);APP._saveTimer=setTimeout(()=>saveDraft(true),1500);}
-function startAutoSave(){clearInterval(APP.autoTimer);APP.autoTimer=setInterval(()=>saveDraft(true),60000);}
-async function saveDraft(silent=false){
+/* 1500ms meant a pause in typing produced a save, each rewriting the whole
+   multi-MB row. 5s coalesces a burst of edits into one write. */
+function scheduleSave(){clearTimeout(APP._saveTimer);APP._saveTimer=setTimeout(()=>saveDraft(true),5000);}
+/* The periodic save used to fire every 60s whether or not anything had changed,
+   so a form left open rewrote megabytes for nothing. saveDraft now skips no-op
+   saves, which makes this a cheap safety net rather than a steady write load. */
+function startAutoSave(){clearInterval(APP.autoTimer);APP.autoTimer=setInterval(()=>saveDraft(true),120000);}
+
+/* JSON of the last successfully saved snapshot, used to skip no-op saves.
+   Cleared when the hub reports a failed write so the next save retries. */
+let _lastSavedJson=null;
+
+async function saveDraft(silent=false,force=false){
   try{
     const snap={fieldVals,drawData,tplId:APP.currentTemplate?.id,tplName:APP.currentTemplate?.name,inlinePhotos:inlinePhotos.map(ip=>({...ip})),photoPages:photoPages2.map(pp=>({...pp}))};
-    localStorage.setItem('ff_autosave',JSON.stringify(snap));
+    const json=JSON.stringify(snap);
+    // Nothing changed since the last save: skip the write entirely.
+    if(!force&&json===_lastSavedJson){if(!silent)showToast('Auto-saved','tok');return;}
+    /* localStorage has its own quota (~5MB) and a photo-heavy snapshot can blow
+       it. This used to share one try block with the postMessage below, so a
+       QuotaExceededError silently skipped the hub save too -- the local cache
+       failing must not cost us the remote write. */
+    try{localStorage.setItem('ff_autosave',json);}
+    catch(e){console.warn('local autosave cache failed (continuing to hub):',e&&e.name);}
     if(APP.hubDocId&&window.parent!==window){
       window.parent.postMessage({type:'DRAFT_SAVE',docId:APP.hubDocId,payload:snap},'*');
     }
+    _lastSavedJson=json;
     const ss=document.getElementById('save-status');
     if(ss)ss.textContent='Saved '+new Date().toLocaleTimeString('en-NZ',{hour:'2-digit',minute:'2-digit'});
   }catch(e){}
   if(!silent)showToast('Auto-saved','tok');
 }
-function closeEditor(){clearInterval(APP.autoTimer);showSc('slib');}
+function closeEditor(){
+  clearInterval(APP.autoTimer);
+  /* Flush any edit still sitting in the debounce window. With the debounce at 5s
+     this matters: leaving via "Change Form" used to drop whatever had not yet
+     fired. Forced, so it also retries a previously failed save. saveDraft has no
+     await inside it, so the postMessage is sent before showSc() swaps screens. */
+  clearTimeout(APP._saveTimer);
+  saveDraft(true,true);
+  showSc('slib');
+}
 
 // ── EXPORT PDF (same logic as pc-asbuilt) ──
 function showFNModal(){
@@ -1851,6 +1899,12 @@ function showToast(msg,cls=''){const t=document.getElementById('toast');t.textCo
 let _ctxApplied=false;
 window.addEventListener('message',function(e){
   if(!e.data)return;
+  /* The hub acks every DRAFT_SAVE. A failed write must clear the no-op guard, or
+     a save that failed would never be retried while the form sits unchanged. */
+  if(e.data.type==='DRAFT_SAVED'&&e.data.ok===false){
+    _lastSavedJson=null;
+    console.warn('Hub rejected draft save, will retry:',e.data.error);
+  }
   if(e.data.type==='FORM_REQUEST'||e.data.type==='JOB_CONTEXT'){
     if(_ctxApplied)return; // hub sends context twice (onReady + frame.load) — only apply once
     _ctxApplied=true;
