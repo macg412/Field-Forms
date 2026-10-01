@@ -1195,6 +1195,14 @@ function placeImageOnPage(pageNum,dataUrl,xPct,yPct,wrap,W,H){
     ip.y=Math.max(0,yPct-ip.h/2);
     inlinePhotos.push(ip);renderInlinePhoto(ip,wrap,W,H);
     scheduleSave();showToast('Photo placed — drag to reposition, resize with handle','tok');
+    uploadPhoto('ff_'+ip.id,dataUrl,url=>{
+      if(!url)return;                                   // upload failed: keep the data URL
+      if(!inlinePhotos.includes(ip)||ip.dataUrl!==dataUrl)return;  // removed or replaced meanwhile
+      ip.dataUrl=url;
+      const el=document.querySelector(`[data-ipid="${ip.id}"] img`);
+      if(el)el.src=url;
+      scheduleSave();
+    });
   };
   img.src=dataUrl;
 }
@@ -1347,7 +1355,7 @@ function addPhotoCard(obj){
   card.innerHTML=`<div class="pcard-img"><button class="pcard-badd" title="Add photo">＋</button><button class="pcard-dl" title="Download photo">↓</button><button class="pcard-del" title="Remove">✕</button></div><div class="pcard-body"><input class="pcard-cap" type="text" placeholder="Caption…" maxlength="120" value="${obj.title||''}"></div>`;
   const imgDiv=card.querySelector('.pcard-img');
   const cap=card.querySelector('.pcard-cap');
-  const pickPhoto=()=>{const fi=document.createElement('input');fi.type='file';fi.accept='image/*';fi.onchange=function(){const f=this.files[0];if(!f)return;if(!obj.title){obj.title=fileBaseName(f.name);cap.value=obj.title;}const rd=new FileReader();rd.onload=ev=>{fixImgOrientation(ev.target.result,corrected=>{obj.dataUrl=corrected;obj.mimeType='image/jpeg';setCardImg(corrected);scheduleSave();});};rd.readAsDataURL(f);};fi.click();};
+  const pickPhoto=()=>{const fi=document.createElement('input');fi.type='file';fi.accept='image/*';fi.onchange=function(){const f=this.files[0];if(!f)return;if(!obj.title){obj.title=fileBaseName(f.name);cap.value=obj.title;}const rd=new FileReader();rd.onload=ev=>{fixImgOrientation(ev.target.result,corrected=>{obj.dataUrl=corrected;obj.mimeType='image/jpeg';setCardImg(corrected);scheduleSave();uploadPhoto('ff_pp_'+obj.id,corrected,url=>{if(!url)return;if(obj.dataUrl!==corrected)return;obj.dataUrl=url;setCardImg(url);scheduleSave();});});};rd.readAsDataURL(f);};fi.click();};
   // Swap thumbnail contents without clobbering the corner buttons
   function setCardImg(dataUrl){
     const old=imgDiv.querySelector('img');if(old)old.remove();
@@ -1373,13 +1381,28 @@ function addPhotoCard(obj){
 }
 
 // Save a photo page's image to the device
-function downloadPhotoPage(obj){
+async function downloadPhotoPage(obj){
   if(!obj.dataUrl){showToast('No photo to download','twrn');return;}
   const ext=(obj.mimeType==='image/png'||/^data:image\/png/.test(obj.dataUrl))?'png':'jpg';
   const base=(obj.title||`photo-${obj.id}`).replace(/[\\/:*?"<>|]+/g,'-').trim().slice(0,60)||`photo-${obj.id}`;
+  /* Route everything through a blob URL. The download attribute is ignored for a
+     cross-origin href, so once a photo lives in Storage, assigning its URL here
+     would navigate to the image instead of saving it -- inside this iframe, that
+     means navigating the frame away from the form. */
+  let href,revoke=null;
+  try{
+    const bytes=await photoBytes(obj.dataUrl);
+    href=URL.createObjectURL(new Blob([bytes],{type:obj.mimeType||'image/jpeg'}));
+    revoke=href;
+  }catch(err){
+    console.error('photo download failed',err);
+    showToast('Could not download that photo','twrn');
+    return;
+  }
   const a=document.createElement('a');
-  a.href=obj.dataUrl;a.download=`${base}.${ext}`;
+  a.href=href;a.download=`${base}.${ext}`;
   document.body.appendChild(a);a.click();a.remove();
+  if(revoke)setTimeout(()=>URL.revokeObjectURL(revoke),1000);
 }
 
 // ── PHOTO TRAY DRAG-TO-REORDER ──
@@ -1495,6 +1518,39 @@ function commitPhotoOrder(){
    Kept in step with jobcard.html's loadImg, which uses the same numbers. */
 const PHOTO_MAX_EDGE=1600;
 const PHOTO_QUALITY=0.75;
+
+/* A stored photo is either a data: URL (captured offline, or any draft predating
+   the Storage upload path) or an https:// Storage URL. These two helpers are the
+   only places that need to know the difference.
+   photoImage sets crossOrigin BEFORE src, which is mandatory rather than merely
+   tidy: inline photos get composited onto a canvas that is then read back with
+   toDataURL, and a canvas tainted by a cross-origin image makes that throw and
+   takes the whole PDF export down with it. */
+function photoImage(src){
+  return new Promise((res,rej)=>{
+    const img=new Image();
+    if(typeof src==='string'&&src.startsWith('https://'))img.crossOrigin='anonymous';
+    img.onload=()=>res(img);
+    img.onerror=()=>rej(new Error('photo failed to load: '+String(src).slice(0,80)));
+    img.src=src;
+  });
+}
+async function photoBytes(src){
+  if(src.startsWith('data:'))return Uint8Array.from(atob(src.split(',')[1]),c=>c.charCodeAt(0));
+  const r=await fetch(src);
+  if(!r.ok)throw new Error('photo fetch failed ('+r.status+'): '+src.slice(0,80));
+  return new Uint8Array(await r.arrayBuffer());
+}
+/* Ask the hub to move a photo into Storage and swap the data URL for the returned
+   URL. Failure or being offline leaves the data URL in place -- the photo is never
+   lost, it just stays in the payload as before. */
+const _pendingUploads={};
+function uploadPhoto(key,dataUrl,onUrl){
+  if(!(APP.hubDocId&&window.parent!==window))return;
+  if(!/^data:/.test(dataUrl))return;              // already a Storage URL
+  _pendingUploads[key]=onUrl;
+  window.parent.postMessage({type:'PHOTO_UPLOAD',docId:APP.hubDocId,key,dataUrl},'*');
+}
 
 function fixImgOrientation(dataUrl,callback){
   const img=document.createElement('img');img.style.cssText='position:fixed;left:-99999px;top:-99999px;visibility:hidden;image-orientation:from-image;';document.body.appendChild(img);
@@ -1683,10 +1739,11 @@ async function buildExportPDF(){
       for(const ip of inlinePhotos.filter(x=>x.pageNum===p)){
         if(!ip.dataUrl)continue;
         try{
-          const img=new Image();
-          await new Promise((res,rej)=>{img.onload=res;img.onerror=rej;img.src=ip.dataUrl;});
+          /* photoImage sets crossOrigin for Storage URLs; without it this canvas
+             becomes tainted and the cv.toDataURL below throws, killing the export. */
+          const img=await photoImage(ip.dataUrl);
           ctx2d.drawImage(img,ip.x/100*cv.width,ip.y/100*cv.height,ip.w/100*cv.width,ip.h/100*cv.height);
-        }catch(e){}
+        }catch(e){console.error('inline photo skipped in PDF',e);}
       }
       // Embed as JPEG at native PDF page dimensions
       const jpgData=cv.toDataURL('image/jpeg',0.93);
@@ -1702,8 +1759,13 @@ async function buildExportPDF(){
       const pg=newDoc.addPage([PDFLib.PageSizes.A4[0],PDFLib.PageSizes.A4[1]]);
       const W=pg.getWidth(),H=pg.getHeight();
       pg.drawRectangle({x:0,y:0,width:W,height:H,color:rgb(1,1,1)});
-      const ib=Uint8Array.from(atob(pb.dataUrl.split(',')[1]),c=>c.charCodeAt(0));
-      const img=pb.dataUrl.startsWith('data:image/png')?await newDoc.embedPng(ib):await newDoc.embedJpg(ib);
+      /* Was atob(pb.dataUrl.split(',')[1]), which only ever worked for data URLs --
+         a Storage URL has no comma-delimited payload, so it would throw. photoBytes
+         handles both. The PNG test must consult mimeType too, since an https URL
+         carries no "data:image/png" prefix to sniff. */
+      const ib=await photoBytes(pb.dataUrl);
+      const isPng=pb.mimeType==='image/png'||pb.dataUrl.startsWith('data:image/png');
+      const img=isPng?await newDoc.embedPng(ib):await newDoc.embedJpg(ib);
       const dims=img.scaleToFit(W,H);
       pg.drawImage(img,{x:(W-dims.width)/2,y:(H-dims.height)/2,width:dims.width,height:dims.height});
       const title=pb.title||`Photo ${pb.id}`;const barH=30;
@@ -1904,6 +1966,12 @@ window.addEventListener('message',function(e){
   if(e.data.type==='DRAFT_SAVED'&&e.data.ok===false){
     _lastSavedJson=null;
     console.warn('Hub rejected draft save, will retry:',e.data.error);
+  }
+  /* Hub finished (or failed) a Storage upload. url === null means keep the data URL. */
+  if(e.data.type==='PHOTO_UPLOADED'){
+    const cb=_pendingUploads[e.data.key];
+    if(cb){delete _pendingUploads[e.data.key];cb(e.data.url);}
+    return;
   }
   if(e.data.type==='FORM_REQUEST'||e.data.type==='JOB_CONTEXT'){
     if(_ctxApplied)return; // hub sends context twice (onReady + frame.load) — only apply once
